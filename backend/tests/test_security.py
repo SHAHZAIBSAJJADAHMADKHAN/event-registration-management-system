@@ -101,21 +101,21 @@ def api_client():
 
 
 def test_no_token_is_rejected(api_client: TestClient) -> None:
-    response = api_client.get("/auth/me")
+    response = api_client.get("/api/auth/me")
 
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "authentication_required"
 
 
 def test_malformed_token_is_rejected(api_client: TestClient) -> None:
-    response = api_client.get("/auth/me", headers={"Authorization": "Bearer malformed"})
+    response = api_client.get("/api/auth/me", headers={"Authorization": "Bearer malformed"})
 
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "invalid_token"
 
 
 def test_valid_attendee_is_resolved_from_profile_not_token_role(api_client: TestClient) -> None:
-    response = api_client.get("/auth/me", headers={"Authorization": "Bearer valid-token"})
+    response = api_client.get("/api/auth/me", headers={"Authorization": "Bearer valid-token"})
 
     assert response.status_code == 200
     assert response.json()["id"] == str(USER_ID)

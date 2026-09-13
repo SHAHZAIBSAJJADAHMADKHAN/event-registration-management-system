@@ -75,22 +75,22 @@ def admin_client(event_service: EventService):
 
 
 def test_admin_creates_lists_gets_and_updates_event(admin_client: TestClient) -> None:
-    created = admin_client.post("/admin/events", json=payload())
+    created = admin_client.post("/api/admin/events", json=payload())
     assert created.status_code == 201
     event = created.json()
     assert event["status"] == "draft"
     assert event["created_by"] == str(ADMIN.id)
 
-    listed = admin_client.get("/admin/events")
+    listed = admin_client.get("/api/admin/events")
     assert listed.status_code == 200
     assert len(listed.json()) == 1
 
-    fetched = admin_client.get(f"/admin/events/{event['id']}")
+    fetched = admin_client.get(f"/api/admin/events/{event['id']}")
     assert fetched.status_code == 200
     assert fetched.json()["id"] == event["id"]
 
     updated = admin_client.patch(
-        f"/admin/events/{event['id']}", json={"title": "Updated workshop", "capacity": 30}
+        f"/api/admin/events/{event['id']}", json={"title": "Updated workshop", "capacity": 30}
     )
     assert updated.status_code == 200
     assert updated.json()["title"] == "Updated workshop"
@@ -100,15 +100,15 @@ def test_admin_creates_lists_gets_and_updates_event(admin_client: TestClient) ->
 def test_unauthenticated_and_attendee_requests_are_rejected(event_service: EventService) -> None:
     app.dependency_overrides[get_event_service] = lambda: event_service
     with TestClient(app) as client:
-        unauthenticated = client.post("/admin/events", json=payload())
+        unauthenticated = client.post("/api/admin/events", json=payload())
     assert unauthenticated.status_code == 401
     app.dependency_overrides.clear()
 
     app.dependency_overrides[require_authenticated_user] = lambda: ATTENDEE
     app.dependency_overrides[get_event_service] = lambda: event_service
     with TestClient(app) as client:
-        attendee = client.post("/admin/events", json=payload())
-        attendee_update = client.patch(f"/admin/events/{uuid4()}", json={"capacity": 10})
+        attendee = client.post("/api/admin/events", json=payload())
+        attendee_update = client.patch(f"/api/admin/events/{uuid4()}", json={"capacity": 10})
     app.dependency_overrides.clear()
     assert attendee.status_code == 403
     assert attendee_update.status_code == 403
@@ -121,41 +121,41 @@ def test_unauthenticated_and_attendee_requests_are_rejected(event_service: Event
 def test_invalid_event_input_is_rejected(
     admin_client: TestClient, invalid_payload: dict[str, object]
 ) -> None:
-    response = admin_client.post("/admin/events", json=invalid_payload)
+    response = admin_client.post("/api/admin/events", json=invalid_payload)
     assert response.status_code == 422
 
 
 def test_missing_event_and_invalid_transition_return_safe_errors(admin_client: TestClient) -> None:
-    missing = admin_client.get(f"/admin/events/{uuid4()}")
+    missing = admin_client.get(f"/api/admin/events/{uuid4()}")
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "event_not_found"
 
-    created = admin_client.post("/admin/events", json=payload()).json()
-    invalid = admin_client.patch(f"/admin/events/{created['id']}/status", json={"status": "completed"})
+    created = admin_client.post("/api/admin/events", json=payload()).json()
+    invalid = admin_client.patch(f"/api/admin/events/{created['id']}/status", json={"status": "completed"})
     assert invalid.status_code == 409
     assert invalid.json()["error"]["code"] == "invalid_event_transition"
 
 
 def test_status_transitions_cancel_and_complete_are_terminal(admin_client: TestClient) -> None:
-    draft = admin_client.post("/admin/events", json=payload()).json()
-    cancelled = admin_client.patch(f"/admin/events/{draft['id']}/status", json={"status": "cancelled"})
+    draft = admin_client.post("/api/admin/events", json=payload()).json()
+    cancelled = admin_client.patch(f"/api/admin/events/{draft['id']}/status", json={"status": "cancelled"})
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] == "cancelled"
     assert admin_client.patch(
-        f"/admin/events/{draft['id']}/status", json={"status": "published"}
+        f"/api/admin/events/{draft['id']}/status", json={"status": "published"}
     ).status_code == 409
 
-    published = admin_client.post("/admin/events", json=payload()).json()
+    published = admin_client.post("/api/admin/events", json=payload()).json()
     assert admin_client.patch(
-        f"/admin/events/{published['id']}/status", json={"status": "published"}
+        f"/api/admin/events/{published['id']}/status", json={"status": "published"}
     ).status_code == 200
     completed = admin_client.patch(
-        f"/admin/events/{published['id']}/status", json={"status": "completed"}
+        f"/api/admin/events/{published['id']}/status", json={"status": "completed"}
     )
     assert completed.status_code == 200
     assert completed.json()["status"] == "completed"
     assert admin_client.patch(
-        f"/admin/events/{published['id']}/status", json={"status": "cancelled"}
+        f"/api/admin/events/{published['id']}/status", json={"status": "cancelled"}
     ).status_code == 409
 
 

@@ -80,7 +80,7 @@ def attendee_client(discovery_service: EventDiscoveryService):
 
 
 def test_only_published_future_events_appear(attendee_client: TestClient) -> None:
-    response = attendee_client.get("/events")
+    response = attendee_client.get("/api/events")
 
     assert response.status_code == 200
     events = response.json()
@@ -110,8 +110,8 @@ def test_remaining_availability_never_becomes_negative() -> None:
 
 
 def test_attendee_can_open_discoverable_event(attendee_client: TestClient) -> None:
-    listed = attendee_client.get("/events").json()
-    detail = attendee_client.get(f"/events/{listed[0]['id']}")
+    listed = attendee_client.get("/api/events").json()
+    detail = attendee_client.get(f"/api/events/{listed[0]['id']}")
 
     assert detail.status_code == 200
     assert detail.json()["remaining_availability"] == 3
@@ -128,7 +128,7 @@ def test_non_discoverable_detail_returns_not_found(
         if item["status"] == "draft"
     )
 
-    response = attendee_client.get(f"/events/{hidden_id}")
+    response = attendee_client.get(f"/api/events/{hidden_id}")
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "event_not_found"
 
@@ -138,13 +138,13 @@ def test_unauthenticated_and_admin_discovery_access_are_rejected(
 ) -> None:
     app.dependency_overrides[get_event_discovery_service] = lambda: discovery_service
     with TestClient(app) as client:
-        unauthenticated = client.get("/events")
+        unauthenticated = client.get("/api/events")
     app.dependency_overrides.clear()
     assert unauthenticated.status_code == 401
 
     app.dependency_overrides[require_authenticated_user] = lambda: ADMIN
     app.dependency_overrides[get_event_discovery_service] = lambda: discovery_service
     with TestClient(app) as client:
-        admin = client.get("/events")
+        admin = client.get("/api/events")
     app.dependency_overrides.clear()
     assert admin.status_code == 403

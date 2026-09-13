@@ -259,7 +259,7 @@ def test_live_phase_two_database_foundation(live_context) -> None:
     assert attendee_a_auth.session is not None
     with TestClient(app) as api:
         current_user_response = api.get(
-            "/auth/me",
+            "/api/auth/me",
             headers={"Authorization": f"Bearer {attendee_a_auth.session.access_token}"},
         )
     assert current_user_response.status_code == 200
@@ -304,40 +304,40 @@ def test_live_phase_four_admin_event_management(live_context) -> None:
     }
 
     with TestClient(app) as api:
-        attendee_response = api.post("/admin/events", json=payload, headers=attendee_headers)
+        attendee_response = api.post("/api/admin/events", json=payload, headers=attendee_headers)
         assert attendee_response.status_code == 403, attendee_response.json()
 
-        created = api.post("/admin/events", json=payload, headers=headers)
+        created = api.post("/api/admin/events", json=payload, headers=headers)
         assert created.status_code == 201
         event = created.json()
         event_ids.append(event["id"])
         assert event["created_by"] == admin_id
         assert event["status"] == "draft"
 
-        listed = api.get("/admin/events", headers=headers)
+        listed = api.get("/api/admin/events", headers=headers)
         assert listed.status_code == 200
         assert any(row["id"] == event["id"] for row in listed.json())
-        assert api.get(f"/admin/events/{event['id']}", headers=headers).status_code == 200
+        assert api.get(f"/api/admin/events/{event['id']}", headers=headers).status_code == 200
 
         updated = api.patch(
-            f"/admin/events/{event['id']}",
+            f"/api/admin/events/{event['id']}",
             json={"title": f"{prefix} updated admin event"},
             headers=headers,
         )
         assert updated.status_code == 200
         assert updated.json()["title"] == f"{prefix} updated admin event"
         assert api.patch(
-            f"/admin/events/{event['id']}/status",
+            f"/api/admin/events/{event['id']}/status",
             json={"status": "completed"},
             headers=headers,
         ).status_code == 409
         assert api.patch(
-            f"/admin/events/{event['id']}/status",
+            f"/api/admin/events/{event['id']}/status",
             json={"status": "published"},
             headers=headers,
         ).status_code == 200
         assert api.patch(
-            f"/admin/events/{event['id']}/status",
+            f"/api/admin/events/{event['id']}/status",
             json={"status": "completed"},
             headers=headers,
         ).status_code == 200
@@ -381,8 +381,8 @@ def test_live_phase_five_event_discovery(live_context) -> None:
     headers = {"Authorization": f"Bearer {attendee_auth.session.access_token}"}
 
     with TestClient(app) as api:
-        assert api.get("/events").status_code == 401
-        listing = api.get("/events", headers=headers)
+        assert api.get("/api/events").status_code == 401
+        listing = api.get("/api/events", headers=headers)
         assert listing.status_code == 200
         rows = {row["id"]: row for row in listing.json()}
         assert published_future_id in rows
@@ -393,8 +393,8 @@ def test_live_phase_five_event_discovery(live_context) -> None:
         assert rows[published_future_id]["active_registration_count"] == 1
         assert rows[published_future_id]["remaining_availability"] == 2
 
-        assert api.get(f"/events/{published_future_id}", headers=headers).status_code == 200
-        assert api.get(f"/events/{draft_id}", headers=headers).status_code == 404
+        assert api.get(f"/api/events/{published_future_id}", headers=headers).status_code == 200
+        assert api.get(f"/api/events/{draft_id}", headers=headers).status_code == 404
 
 
 def test_live_phase_six_registration_lifecycle(live_context) -> None:
@@ -422,50 +422,50 @@ def test_live_phase_six_registration_lifecycle(live_context) -> None:
     attendee_b_headers = {"Authorization": f"Bearer {attendee_b_auth.session.access_token}"}
 
     with TestClient(app) as api:
-        assert api.post(f"/events/{published_id}/registrations").status_code == 401
+        assert api.post(f"/api/events/{published_id}/registrations").status_code == 401
         created = api.post(
-            f"/events/{published_id}/registrations", headers=attendee_a_headers
+            f"/api/events/{published_id}/registrations", headers=attendee_a_headers
         )
         assert created.status_code == 201
         registration = created.json()
         assert registration["status"] == "active"
         assert api.post(
-            f"/events/{published_id}/registrations", headers=attendee_a_headers
+            f"/api/events/{published_id}/registrations", headers=attendee_a_headers
         ).status_code == 409
         assert api.post(
-            f"/events/{published_id}/registrations", headers=attendee_b_headers
+            f"/api/events/{published_id}/registrations", headers=attendee_b_headers
         ).status_code == 409
 
-        mine = api.get("/me/registrations", headers=attendee_a_headers)
+        mine = api.get("/api/me/registrations", headers=attendee_a_headers)
         assert mine.status_code == 200
         assert any(row["id"] == registration["id"] for row in mine.json())
         assert api.get(
-            f"/me/registrations/{registration['id']}", headers=attendee_b_headers
+            f"/api/me/registrations/{registration['id']}", headers=attendee_b_headers
         ).status_code == 404
         assert api.patch(
-            f"/me/registrations/{registration['id']}/cancel", headers=attendee_b_headers
+            f"/api/me/registrations/{registration['id']}/cancel", headers=attendee_b_headers
         ).status_code == 404
 
         cancelled = api.patch(
-            f"/me/registrations/{registration['id']}/cancel", headers=attendee_a_headers
+            f"/api/me/registrations/{registration['id']}/cancel", headers=attendee_a_headers
         )
         assert cancelled.status_code == 200
         assert cancelled.json()["status"] == "cancelled"
         assert api.patch(
-            f"/me/registrations/{registration['id']}/cancel", headers=attendee_a_headers
+            f"/api/me/registrations/{registration['id']}/cancel", headers=attendee_a_headers
         ).status_code == 409
 
-        listing = api.get("/events", headers=attendee_a_headers)
+        listing = api.get("/api/events", headers=attendee_a_headers)
         row = next(item for item in listing.json() if item["id"] == published_id)
         assert row["active_registration_count"] == 0
         assert row["remaining_availability"] == 1
         assert api.post(
-            f"/events/{published_id}/registrations", headers=attendee_a_headers
+            f"/api/events/{published_id}/registrations", headers=attendee_a_headers
         ).status_code == 201
 
         for event_id in (draft_id, cancelled_id, completed_id, past_id):
             assert api.post(
-                f"/events/{event_id}/registrations", headers=attendee_a_headers
+                f"/api/events/{event_id}/registrations", headers=attendee_a_headers
             ).status_code == 409
 
 
@@ -502,29 +502,29 @@ def test_live_phase_seven_admin_operations(live_context) -> None:
     attendee_headers = {"Authorization": f"Bearer {attendee_auth.session.access_token}"}
 
     with TestClient(app) as api:
-        assert api.get("/admin/dashboard").status_code == 401
-        assert api.get("/admin/dashboard", headers=attendee_headers).status_code == 403
+        assert api.get("/api/admin/dashboard").status_code == 401
+        assert api.get("/api/admin/dashboard", headers=attendee_headers).status_code == 403
 
-        attendees = api.get(f"/admin/events/{event_id}/attendees", headers=admin_headers)
+        attendees = api.get(f"/api/admin/events/{event_id}/attendees", headers=admin_headers)
         assert attendees.status_code == 200, attendees.json()
         assert {row["registration_status"] for row in attendees.json()} == {"active", "cancelled"}
         assert all(row["attendee_email"].endswith("@example.test") for row in attendees.json())
 
         active = api.get(
-            f"/admin/events/{event_id}/attendees?status=active", headers=admin_headers
+            f"/api/admin/events/{event_id}/attendees?status=active", headers=admin_headers
         )
         assert active.status_code == 200
         assert len(active.json()) == 1
-        summary = api.get(f"/admin/events/{event_id}/summary", headers=admin_headers)
+        summary = api.get(f"/api/admin/events/{event_id}/summary", headers=admin_headers)
         assert summary.status_code == 200
         assert summary.json()["active_registrations"] == 1
         assert summary.json()["cancelled_registrations"] == 1
         assert summary.json()["remaining_availability"] == 2
 
-        check_in = api.get(f"/admin/events/{event_id}/check-in", headers=admin_headers)
+        check_in = api.get(f"/api/admin/events/{event_id}/check-in", headers=admin_headers)
         assert check_in.status_code == 200
         assert len(check_in.json()) == 1
-        export = api.get(f"/admin/events/{event_id}/attendees/export.csv", headers=admin_headers)
+        export = api.get(f"/api/admin/events/{event_id}/attendees/export.csv", headers=admin_headers)
         assert export.status_code == 200
         assert export.headers["content-type"].startswith("text/csv")
         assert "Registration ID" in export.text

@@ -111,32 +111,32 @@ def test_successful_registration_and_my_registration_history(
     attendee_client: TestClient, registration_service: RegistrationService
 ) -> None:
     event_id = registration_service._repository.event_id
-    created = attendee_client.post(f"/events/{event_id}/registrations")
+    created = attendee_client.post(f"/api/events/{event_id}/registrations")
     assert created.status_code == 201
     registration = created.json()
     assert registration["status"] == "active"
     assert registration["event"]["title"] == "Future workshop"
     assert registration_service._repository.atomic_calls == 1
 
-    mine = attendee_client.get("/me/registrations")
+    mine = attendee_client.get("/api/me/registrations")
     assert mine.status_code == 200
     assert [row["id"] for row in mine.json()] == [registration["id"]]
-    assert attendee_client.get(f"/me/registrations/{registration['id']}").status_code == 200
+    assert attendee_client.get(f"/api/me/registrations/{registration['id']}").status_code == 200
 
 
 def test_duplicate_and_full_registration_are_rejected(
     attendee_client: TestClient, registration_service: RegistrationService
 ) -> None:
     event_id = registration_service._repository.event_id
-    assert attendee_client.post(f"/events/{event_id}/registrations").status_code == 201
-    duplicate = attendee_client.post(f"/events/{event_id}/registrations")
+    assert attendee_client.post(f"/api/events/{event_id}/registrations").status_code == 201
+    duplicate = attendee_client.post(f"/api/events/{event_id}/registrations")
     assert duplicate.status_code == 409
     assert duplicate.json()["error"]["code"] == "duplicate_registration"
 
     registration_service._repository.registrations.clear()
     registration_service._repository.capacity = 1
     registration_service._repository.create_atomic(event_id, ATTENDEE_B.id)
-    full = attendee_client.post(f"/events/{event_id}/registrations")
+    full = attendee_client.post(f"/api/events/{event_id}/registrations")
     assert full.status_code == 409
     assert full.json()["error"]["code"] == "event_full"
 
@@ -156,7 +156,7 @@ def test_ineligible_events_are_rejected_by_atomic_foundation(
     event_id = registration_service._repository.event_id
     registration_service._repository.failures[event_id] = failure
 
-    response = attendee_client.post(f"/events/{event_id}/registrations")
+    response = attendee_client.post(f"/api/events/{event_id}/registrations")
     assert response.status_code in {404, 409}
     assert response.json()["error"]["code"] in {"event_not_eligible", "event_full", "event_not_found"}
 
@@ -165,19 +165,19 @@ def test_cancellation_preserves_history_releases_capacity_and_cannot_repeat(
     attendee_client: TestClient, registration_service: RegistrationService
 ) -> None:
     event_id = registration_service._repository.event_id
-    created = attendee_client.post(f"/events/{event_id}/registrations").json()
+    created = attendee_client.post(f"/api/events/{event_id}/registrations").json()
     assert registration_service._repository.active_count(event_id) == 1
 
-    cancelled = attendee_client.patch(f"/me/registrations/{created['id']}/cancel")
+    cancelled = attendee_client.patch(f"/api/me/registrations/{created['id']}/cancel")
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] == "cancelled"
     assert registration_service._repository.active_count(event_id) == 0
 
-    repeated = attendee_client.patch(f"/me/registrations/{created['id']}/cancel")
+    repeated = attendee_client.patch(f"/api/me/registrations/{created['id']}/cancel")
     assert repeated.status_code == 409
     assert repeated.json()["error"]["code"] == "registration_already_cancelled"
 
-    replacement = attendee_client.post(f"/events/{event_id}/registrations")
+    replacement = attendee_client.post(f"/api/events/{event_id}/registrations")
     assert replacement.status_code == 201
     assert registration_service._repository.active_count(event_id) == 1
 
@@ -188,8 +188,8 @@ def test_attendee_cannot_read_or_cancel_another_attendees_registration(
     event_id = registration_service._repository.event_id
     other = registration_service._repository.create_atomic(event_id, ATTENDEE_B.id)
 
-    detail = attendee_client.get(f"/me/registrations/{other['id']}")
-    cancel = attendee_client.patch(f"/me/registrations/{other['id']}/cancel")
+    detail = attendee_client.get(f"/api/me/registrations/{other['id']}")
+    cancel = attendee_client.patch(f"/api/me/registrations/{other['id']}/cancel")
     assert detail.status_code == 404
     assert cancel.status_code == 404
     assert registration_service._repository.get_owned(UUID(other["id"]), ATTENDEE_B.id)["status"] == "active"
@@ -201,13 +201,13 @@ def test_unauthenticated_and_non_attendee_registration_access_is_rejected(
     event_id = registration_service._repository.event_id
     app.dependency_overrides[get_registration_service] = lambda: registration_service
     with TestClient(app) as client:
-        unauthenticated = client.post(f"/events/{event_id}/registrations")
+        unauthenticated = client.post(f"/api/events/{event_id}/registrations")
     app.dependency_overrides.clear()
     assert unauthenticated.status_code == 401
 
     app.dependency_overrides[require_authenticated_user] = lambda: ADMIN
     app.dependency_overrides[get_registration_service] = lambda: registration_service
     with TestClient(app) as client:
-        admin = client.post(f"/events/{event_id}/registrations")
+        admin = client.post(f"/api/events/{event_id}/registrations")
     app.dependency_overrides.clear()
     assert admin.status_code == 403

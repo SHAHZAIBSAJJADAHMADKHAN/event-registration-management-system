@@ -9,7 +9,7 @@ The root [`vercel.json`](../vercel.json) defines two services:
 - `frontend` uses `frontend/`, Vite, `npm run build`, and `dist` output.
 - `backend` uses `backend/` and the native FastAPI entry point `app.main:app`.
 
-Top-level routing sends `/api/*` requests to the FastAPI service before sending all remaining traffic to the frontend service. A backend service route captures the suffix as `apiPath` and applies the native Vercel `request.path` transform to `/api/<path>` before FastAPI sees it. As a result, `/api/health` reaches the existing `/health` route and `/api/auth/me` reaches `/auth/me`, without changing application routes.
+Top-level routing sends `/api/*` requests to the FastAPI service before sending all remaining traffic to the frontend service. FastAPI natively registers its existing routers beneath `/api`, so Vercel can forward the original public path without a deployment-time path transform. For example, `/api/health` reaches the health route and `/api/auth/me` reaches the existing authenticated-user handler.
 
 The frontend service has its own SPA fallback to `index.html`. Direct refreshes of attendee and admin routes, including `/events`, `/my-registrations`, `/admin`, `/admin/events`, and `/admin/reports`, remain frontend requests. API paths are selected first and never fall through to the SPA.
 
@@ -41,7 +41,7 @@ Set these browser-safe frontend build values in Vercel:
 
 `VITE_API_BASE_URL=/api` keeps browser-to-API requests on the deployment origin. This avoids cross-origin browser requests while the backend retains its existing server-side JWT verification and authorization behavior. Never expose `SUPABASE_SECRET_KEY` to the frontend service or in a `VITE_*` variable.
 
-For local development, set ignored `frontend/.env` to `VITE_API_BASE_URL=http://localhost:8000`. The example file intentionally shows the production-safe `/api` value.
+For local development, set ignored `frontend/.env` to `VITE_API_BASE_URL=http://localhost:8000/api`. The example file intentionally shows the production-safe `/api` value.
 
 ## Supabase production checklist
 

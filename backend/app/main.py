@@ -29,12 +29,15 @@ def create_application() -> FastAPI:
     )
     app.add_exception_handler(APIError, api_error_handler)
     app.add_exception_handler(Exception, unexpected_error_handler)
-    app.include_router(system_router)
-    app.include_router(auth_router)
-    app.include_router(admin_events_router)
-    app.include_router(admin_operations_router)
-    app.include_router(discovery_router)
-    app.include_router(registrations_router)
+    # Vercel Services forwards the original /api/* path to FastAPI. Register
+    # the existing routers once beneath that public prefix rather than relying
+    # on deployment-time path rewriting.
+    app.include_router(system_router, prefix="/api")
+    app.include_router(auth_router, prefix="/api")
+    app.include_router(admin_events_router, prefix="/api")
+    app.include_router(admin_operations_router, prefix="/api")
+    app.include_router(discovery_router, prefix="/api")
+    app.include_router(registrations_router, prefix="/api")
     return app
 
 

@@ -13,19 +13,7 @@
     "backend": {
       "root": "backend",
       "framework": "fastapi",
-      "entrypoint": "app.main:app",
-      "routes": [
-        {
-          "src": "/api/(?<apiPath>.*)",
-          "transforms": [
-            {
-              "type": "request.path",
-              "op": "set",
-              "args": "/$apiPath"
-            }
-          ]
-        }
-      ]
+      "entrypoint": "app.main:app"
     }
   },
   "rewrites": [
