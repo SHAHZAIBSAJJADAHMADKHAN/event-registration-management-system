@@ -16,12 +16,12 @@
       "entrypoint": "app.main:app",
       "routes": [
         {
-          "src": "/api/(.*)",
+          "src": "/api/(?<apiPath>.*)",
           "transforms": [
             {
               "type": "request.path",
               "op": "set",
-              "args": "/$1"
+              "args": "/$apiPath"
             }
           ]
         }

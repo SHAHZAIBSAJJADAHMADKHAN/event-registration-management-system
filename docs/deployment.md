@@ -9,7 +9,7 @@ The root [`vercel.json`](../vercel.json) defines two services:
 - `frontend` uses `frontend/`, Vite, `npm run build`, and `dist` output.
 - `backend` uses `backend/` and the native FastAPI entry point `app.main:app`.
 
-Top-level routing sends `/api/*` requests to the FastAPI service before sending all remaining traffic to the frontend service. The backend service removes only the deployment prefix before FastAPI sees the request, so a public request such as `/api/auth/me` continues to use the existing FastAPI route `/auth/me` without modifying application routes.
+Top-level routing sends `/api/*` requests to the FastAPI service before sending all remaining traffic to the frontend service. A backend service route captures the suffix as `apiPath` and applies the native Vercel `request.path` transform to `/api/<path>` before FastAPI sees it. As a result, `/api/health` reaches the existing `/health` route and `/api/auth/me` reaches `/auth/me`, without changing application routes.
 
 The frontend service has its own SPA fallback to `index.html`. Direct refreshes of attendee and admin routes, including `/events`, `/my-registrations`, `/admin`, `/admin/events`, and `/admin/reports`, remain frontend requests. API paths are selected first and never fall through to the SPA.
 
@@ -41,7 +41,7 @@ Set these browser-safe frontend build values in Vercel:
 
 `VITE_API_BASE_URL=/api` keeps browser-to-API requests on the deployment origin. This avoids cross-origin browser requests while the backend retains its existing server-side JWT verification and authorization behavior. Never expose `SUPABASE_SECRET_KEY` to the frontend service or in a `VITE_*` variable.
 
-For local development, keep `frontend/.env` pointed at `http://localhost:8000`, as shown in `frontend/.env.example`.
+For local development, set ignored `frontend/.env` to `VITE_API_BASE_URL=http://localhost:8000`. The example file intentionally shows the production-safe `/api` value.
 
 ## Supabase production checklist
 
