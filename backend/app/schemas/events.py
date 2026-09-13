@@ -1,6 +1,6 @@
 """Request and response contracts for admin event management."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -34,14 +34,16 @@ class EventTextFields(BaseModel):
 
 
 class EventCreate(EventTextFields):
-    """New events enter the lifecycle as drafts."""
+    """New events may be created as a draft or a valid published event."""
 
     status: EventStatus = EventStatus.DRAFT
 
     @model_validator(mode="after")
-    def require_draft_creation(self) -> "EventCreate":
-        if self.status is not EventStatus.DRAFT:
-            raise ValueError("New events must be created with draft status.")
+    def validate_creation_status(self) -> "EventCreate":
+        if self.status not in {EventStatus.DRAFT, EventStatus.PUBLISHED}:
+            raise ValueError("New events may only be created with draft or published status.")
+        if self.status is EventStatus.PUBLISHED and self.starts_at <= datetime.now(timezone.utc):
+            raise ValueError("Published events must be scheduled in the future.")
         return self
 
 

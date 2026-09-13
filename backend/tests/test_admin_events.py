@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 import pytest
@@ -10,6 +10,7 @@ from app.dependencies.auth import require_admin, require_authenticated_user
 from app.main import app
 from app.schemas.auth import AuthenticatedUser, UserRole
 from app.schemas.events import EventCreate, EventStatusTransition, EventUpdate
+from app.services.discovery import EventDiscoveryService
 from app.services.events import EventService
 
 
@@ -41,6 +42,17 @@ class InMemoryEventRepository:
 
     def count_active_registrations(self, event_id: UUID) -> int:
         return self.active_counts.get(event_id, 0)
+
+    def list_published_upcoming(self, now: datetime) -> list[dict[str, object]]:
+        return [
+            event
+            for event in self.events.values()
+            if event["status"] == "published"
+            and datetime.fromisoformat(str(event["starts_at"])) > now
+        ]
+
+    def active_registration_counts(self, event_ids: list[UUID]) -> dict[UUID, int]:
+        return {event_id: self.active_counts.get(event_id, 0) for event_id in event_ids}
 
 
 ADMIN = AuthenticatedUser(id=uuid4(), full_name="Admin", role=UserRole.ADMIN)
@@ -97,6 +109,23 @@ def test_admin_creates_lists_gets_and_updates_event(admin_client: TestClient) ->
     assert updated.json()["capacity"] == 30
 
 
+def test_admin_can_create_published_event_that_is_discoverable(
+    admin_client: TestClient,
+    event_service: EventService,
+) -> None:
+    response = admin_client.post(
+        "/api/admin/events",
+        json=payload(status="published", starts_at=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat()),
+    )
+    assert response.status_code == 201
+
+    discoverable = EventDiscoveryService(event_service._repository).list_upcoming()
+
+    assert response.json()["status"] == "published"
+    assert len(discoverable) == 1
+    assert str(discoverable[0].id) == response.json()["id"]
+
+
 def test_unauthenticated_and_attendee_requests_are_rejected(event_service: EventService) -> None:
     app.dependency_overrides[get_event_service] = lambda: event_service
     with TestClient(app) as client:
@@ -107,16 +136,25 @@ def test_unauthenticated_and_attendee_requests_are_rejected(event_service: Event
     app.dependency_overrides[require_authenticated_user] = lambda: ATTENDEE
     app.dependency_overrides[get_event_service] = lambda: event_service
     with TestClient(app) as client:
-        attendee = client.post("/api/admin/events", json=payload())
+        attendee_draft = client.post("/api/admin/events", json=payload(status="draft"))
+        attendee_published = client.post("/api/admin/events", json=payload(status="published"))
         attendee_update = client.patch(f"/api/admin/events/{uuid4()}", json={"capacity": 10})
     app.dependency_overrides.clear()
-    assert attendee.status_code == 403
+    assert attendee_draft.status_code == 403
+    assert attendee_published.status_code == 403
     assert attendee_update.status_code == 403
 
 
 @pytest.mark.parametrize(
     "invalid_payload",
-    [payload(capacity=0), payload(status="invalid"), payload(starts_at="2030-01-01T10:00:00")],
+    [
+        payload(capacity=0),
+        payload(status="invalid"),
+        payload(status="completed"),
+        payload(status="cancelled"),
+        payload(status="published", starts_at="2000-01-01T10:00:00Z"),
+        payload(starts_at="2030-01-01T10:00:00"),
+    ],
 )
 def test_invalid_event_input_is_rejected(
     admin_client: TestClient, invalid_payload: dict[str, object]
