@@ -1,0 +1,19 @@
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AdminDashboardPage } from "./AdminDashboardPage";
+import { AdminReportsPage } from "./AdminReportsPage";
+
+const api = vi.hoisted(() => ({ getAdminDashboard: vi.fn(), getAdminEventReport: vi.fn() }));
+const call = vi.hoisted(() => vi.fn((fn) => fn("token")));
+vi.mock("../services/api", () => api);
+vi.mock("../hooks/useApi", () => ({ useApi: () => call }));
+const dashboard = { total_events: 2, total_registrations: 3, available_capacity: 7, active_registrations: 2 };
+const rows = [{ event_id: "a", event_title: "Town Hall", starts_at: "2030-01-01T10:00:00Z", location: "Civic Centre", status: "published", capacity: 10, active_registrations: 2, cancelled_registrations: 1, remaining_availability: 8 }, { event_id: "b", event_title: "Workshop", starts_at: "2030-02-01T10:00:00Z", location: "Library", status: "draft", capacity: 5, active_registrations: 0, cancelled_registrations: 0, remaining_availability: 5 }];
+afterEach(cleanup);
+beforeEach(() => { call.mockClear(); Object.values(api).forEach((mock) => mock.mockReset()); api.getAdminDashboard.mockResolvedValue(dashboard); api.getAdminEventReport.mockResolvedValue(rows); });
+describe("Admin operations pages", () => {
+  it("renders dashboard metrics and the zero-data state", async () => { const view = render(<AdminDashboardPage />); expect(await screen.findByText("7")).toBeInTheDocument(); view.unmount(); api.getAdminDashboard.mockResolvedValue({ total_events: 0, total_registrations: 0, available_capacity: 0, active_registrations: 0 }); render(<AdminDashboardPage />); expect(await screen.findByText("No events have been created yet. Create an event to begin tracking operations.")).toBeInTheDocument(); });
+  it("renders dashboard loading and error states", async () => { api.getAdminDashboard.mockReturnValue(new Promise(() => {})); const view = render(<AdminDashboardPage />); expect(screen.getByText("Loading…")).toBeInTheDocument(); view.unmount(); api.getAdminDashboard.mockRejectedValue(new Error("Admin required")); render(<AdminDashboardPage />); expect(await screen.findByText("Admin required")).toBeInTheDocument(); });
+  it("filters reports and exports the filtered data", async () => { const create = vi.fn(() => "blob:test"); const revoke = vi.fn(); Object.defineProperty(URL, "createObjectURL", { configurable: true, value: create }); Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revoke }); const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {}); render(<AdminReportsPage />); await screen.findByText("Town Hall"); fireEvent.change(screen.getByLabelText("Search events"), { target: { value: "work" } }); expect(screen.queryByText("Town Hall")).not.toBeInTheDocument(); expect(screen.getByText("Workshop")).toBeInTheDocument(); fireEvent.change(screen.getByLabelText("Event status"), { target: { value: "published" } }); expect(screen.getByText("No events match this search or status filter.")).toBeInTheDocument(); fireEvent.change(screen.getByLabelText("Event status"), { target: { value: "draft" } }); fireEvent.click(screen.getByRole("button", { name: "Export CSV" })); expect(create).toHaveBeenCalled(); expect(click).toHaveBeenCalled(); click.mockRestore(); });
+  it("shows reports empty and error states", async () => { api.getAdminEventReport.mockResolvedValue([]); const view = render(<AdminReportsPage />); expect(await screen.findByText("No event report data is available yet.")).toBeInTheDocument(); view.unmount(); api.getAdminEventReport.mockRejectedValue(new Error("Report unavailable")); render(<AdminReportsPage />); expect(await screen.findByText("Report unavailable")).toBeInTheDocument(); });
+});

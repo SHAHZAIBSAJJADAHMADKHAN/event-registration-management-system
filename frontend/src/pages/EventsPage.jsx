@@ -1,0 +1,7 @@
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { getEvents } from "../services/api";
+import { useApi } from "../hooks/useApi";
+import { AsyncState } from "../components/AsyncState";
+const fmt=(date)=>new Intl.DateTimeFormat(undefined,{dateStyle:"medium",timeStyle:"short"}).format(new Date(date));
+export function EventsPage(){const call=useApi(),[events,setEvents]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState("");useEffect(()=>{call(getEvents).then(setEvents).catch(e=>setError(e.message)).finally(()=>setLoading(false))},[call]);return <section><div className="section-heading"><p className="eyebrow">Discover</p><h1>Upcoming events</h1><p>Find your next workshop, seminar, or community gathering.</p></div><AsyncState loading={loading} error={error} empty={events.length===0?"No upcoming published events are available right now.":null}><div className="event-grid">{events.map(e=><article className="event-card" key={e.id}><span className="status-badge">{e.remaining_availability?"Open":"Full"}</span><h2>{e.title}</h2><p>{e.description}</p><dl><div><dt>When</dt><dd>{fmt(e.starts_at)}</dd></div><div><dt>Where</dt><dd>{e.location}</dd></div></dl><div className="card-footer"><strong>{e.remaining_availability} places left</strong><Link className="button" to={`/events/${e.id}`}>View event</Link></div></article>)}</div></AsyncState></section>}
