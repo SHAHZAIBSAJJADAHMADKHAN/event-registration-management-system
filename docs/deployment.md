@@ -1,78 +1,63 @@
-# Deployment and Handover
+# Vercel Deployment Preparation
 
-This project is prepared for the following production flow:
+This repository is prepared for one Vercel **Services** deployment: a Vite frontend at `/` and a native FastAPI service exposed at `/api`. No deployment has been performed by this repository.
 
-```text
-Vercel React/Vite frontend → Render FastAPI backend → Supabase Auth and PostgreSQL
-```
+## Repository routing
 
-Actual cloud deployment is pending. Do not use placeholder values as credentials.
+The root [`vercel.json`](../vercel.json) defines two services:
 
-## Render backend
+- `frontend` uses `frontend/`, Vite, `npm run build`, and `dist` output.
+- `backend` uses `backend/` and the native FastAPI entry point `app.main:app`.
 
-Create a **Web Service** from this repository.
+Top-level routing sends `/api/*` requests to the FastAPI service before sending all remaining traffic to the frontend service. The backend service removes only the deployment prefix before FastAPI sees the request, so a public request such as `/api/auth/me` continues to use the existing FastAPI route `/auth/me` without modifying application routes.
 
-- Root directory: `backend`
-- Runtime: Python 3.12
-- Build command: `pip install -r requirements.txt`
-- Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-- Health check: `/health`
+The frontend service has its own SPA fallback to `index.html`. Direct refreshes of attendee and admin routes, including `/events`, `/my-registrations`, `/admin`, `/admin/events`, and `/admin/reports`, remain frontend requests. API paths are selected first and never fall through to the SPA.
 
-Set these private environment-variable names in Render:
+## Vercel project setup
+
+1. Import the repository as one Vercel project.
+2. In **Build and Deployment**, choose the **Services** framework setting. Vercel Services is required because the project contains the Vite and FastAPI services.
+3. Keep the repository root as the project root; do not set it to `frontend` or `backend`.
+4. Let `vercel.json` define the two service roots and native FastAPI entry point. Do not configure an `uvicorn` start command on Vercel.
+5. Add the environment variables below to the required Vercel environments before deploying.
+
+## Environment variables
+
+Set these backend-only values in Vercel. They are read by FastAPI and must never use a `VITE_` prefix:
 
 - `ENVIRONMENT=production`
-- `FRONTEND_ORIGIN` — the exact Vercel production origin; multiple origins may be comma-separated through `FRONTEND_ORIGINS`
+- `FRONTEND_ORIGIN=https://<your-production-domain>`
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SECRET_KEY`
 - `SUPABASE_JWT_ISSUER`
 - `SUPABASE_JWKS_URL`
 
-`SUPABASE_SECRET_KEY` stays in Render only. Never add it to Vercel or the repository. The health endpoint returns only a service status and contains no database or configuration details.
+Set these browser-safe frontend build values in Vercel:
 
-## Vercel frontend
-
-Import the same repository as a Vercel project.
-
-- Root directory: `frontend`
-- Framework preset: Vite
-- Build command: `npm ci && npm run build`
-- Output directory: `dist`
-
-Set only browser-safe variables:
-
-- `VITE_API_BASE_URL` — the public HTTPS Render backend URL
+- `VITE_API_BASE_URL=/api`
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-`vercel.json` rewrites client-side routes to `index.html`, allowing direct refreshes of attendee and admin URLs without replacing static-asset handling.
+`VITE_API_BASE_URL=/api` keeps browser-to-API requests on the deployment origin. This avoids cross-origin browser requests while the backend retains its existing server-side JWT verification and authorization behavior. Never expose `SUPABASE_SECRET_KEY` to the frontend service or in a `VITE_*` variable.
+
+For local development, keep `frontend/.env` pointed at `http://localhost:8000`, as shown in `frontend/.env.example`.
 
 ## Supabase production checklist
 
-After the Vercel URL exists:
+After Vercel supplies the production domain:
 
-1. Set Supabase Auth **Site URL** to the production frontend URL.
-2. Add the production frontend URL and required local development URL to **Redirect URLs**.
-3. Confirm Vercel has no backend secret variables.
-4. Keep existing RLS policies and FastAPI authorization enabled.
-5. Confirm Render `FRONTEND_ORIGIN` exactly matches the Vercel origin.
+1. Set Supabase Auth **Site URL** to the exact production frontend URL.
+2. Add the production frontend URL and required local development URL to Supabase Auth **Redirect URLs**.
+3. Set `FRONTEND_ORIGIN` to the exact production domain. Multiple explicit origins can be supplied through `FRONTEND_ORIGINS` when required.
+4. Confirm `SUPABASE_SECRET_KEY` exists only in backend runtime configuration.
+5. Keep the existing Supabase RLS policies and FastAPI authorization enabled.
 
 ## Post-deployment smoke test
 
-1. Request `GET /health` from the Render URL.
-2. Open a direct client route such as `/events` and an admin route such as `/admin/dashboard`.
-3. Sign in as an attendee and an admin using separately managed test credentials.
-4. Confirm authenticated API calls, CORS, role authorization, registration ownership, reports, and CSV export.
+1. Request `GET /api/health` from the Vercel deployment.
+2. Directly open `/events` and `/admin/dashboard` to verify SPA refresh behavior.
+3. Sign in as an attendee and an admin using separately managed credentials.
+4. Confirm authenticated `/api` requests, role authorization, registration ownership, reports, and CSV export.
 
-## Handover checklist
-
-- Live frontend URL: pending deployment
-- Live backend URL: pending deployment
-- GitHub repository: provide the repository URL at handover
-- Architecture: [architecture.md](architecture.md)
-- Database evidence: [database-schema.md](database-schema.md)
-- Feature traceability: [requirements-traceability.md](requirements-traceability.md)
-- Test evidence: backend pytest and frontend Vitest/build commands in the README
-- Screenshots: capture landing, attendee events, registration, admin events, attendee list, dashboard, and reports after deployment
-
-Do not store test credentials in this repository. Share them through a separate secure channel only.
+Do not store deployment credentials or test-account credentials in this repository.

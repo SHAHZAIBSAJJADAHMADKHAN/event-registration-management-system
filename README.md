@@ -60,13 +60,13 @@ py -3.12 -m pytest -q
 
 ## Deployment preparation
 
-The intended production flow is **Vercel → FastAPI on Render → Supabase**. The application is prepared for deployment but no cloud service has been deployed yet.
+The intended production flow is **Vercel Services (Vite + FastAPI) → Supabase**. The application is prepared for deployment but no cloud service has been deployed yet.
 
-- Render: root `backend`, build `pip install -r requirements.txt`, start `uvicorn app.main:app --host 0.0.0.0 --port $PORT`, health `/health`.
-- Vercel: root `frontend`, build `npm ci && npm run build`, output `dist`.
-- Vercel receives only `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_PUBLISHABLE_KEY`.
-- Render receives backend configuration, including the backend-only `SUPABASE_SECRET_KEY`.
-- `vercel.json` preserves Vite SPA routing on direct page refreshes.
+- Keep the Vercel project root at this repository root and select the **Services** framework setting.
+- `vercel.json` declares `frontend/` as the Vite service and `backend/` as the native FastAPI service.
+- Browser API requests use `VITE_API_BASE_URL=/api` in Vercel; the deployment routes that prefix to FastAPI while preserving existing backend routes.
+- Vercel receives browser-safe frontend variables plus backend runtime variables, including backend-only `SUPABASE_SECRET_KEY`. Never use a `VITE_*` prefix for the secret key.
+- Service-scoped SPA fallback preserves direct refreshes for client routes.
 
 See [deployment and handover](docs/deployment.md) for the full environment-variable, Supabase redirect URL, smoke-test, test-credential, and final-delivery checklist.
 
