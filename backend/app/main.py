@@ -8,6 +8,7 @@ from app.api.routes.admin_events import router as admin_events_router
 from app.api.routes.admin_operations import router as admin_operations_router
 from app.api.routes.discovery import router as discovery_router
 from app.api.routes.registrations import router as registrations_router
+from app.api.routes.notifications import router as notifications_router
 from app.api.routes.system import router as system_router
 from app.core.config import get_settings
 from app.core.errors import APIError, api_error_handler, unexpected_error_handler
@@ -38,6 +39,7 @@ def create_application() -> FastAPI:
     app.include_router(admin_operations_router, prefix="/api")
     app.include_router(discovery_router, prefix="/api")
     app.include_router(registrations_router, prefix="/api")
+    app.include_router(notifications_router, prefix="/api")
     return app
 
 

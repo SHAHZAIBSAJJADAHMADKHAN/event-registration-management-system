@@ -65,3 +65,13 @@ async def transition_event_status(
     service: Annotated[EventService, Depends(get_event_service)],
 ) -> EventResponse:
     return service.transition(event_id, payload)
+
+
+@router.delete("/{event_id}")
+async def delete_event(
+    event_id: UUID,
+    _: Annotated[AuthenticatedUser, Depends(require_admin)],
+    service: Annotated[EventService, Depends(get_event_service)],
+) -> dict[str, bool]:
+    service.delete(event_id)
+    return {"deleted": True}

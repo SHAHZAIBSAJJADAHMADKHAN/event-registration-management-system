@@ -37,15 +37,35 @@ class EventRepository:
         )
         return response.data[0] if response.data else self.get(event_id)
 
-    def count_active_registrations(self, event_id: UUID) -> int:
+    def count_approved_registrations(self, event_id: UUID) -> int:
         response = (
             self._client.table("registrations")
             .select("id", count="exact")
             .eq("event_id", str(event_id))
-            .eq("status", "active")
+            .eq("status", "approved")
             .execute()
         )
         return response.count or 0
+
+    def count_registrations(self, event_id: UUID) -> int:
+        response = (
+            self._client.table("registrations")
+            .select("id", count="exact")
+            .eq("event_id", str(event_id))
+            .execute()
+        )
+        return response.count or 0
+
+    def delete(self, event_id: UUID) -> bool:
+        self._client.table("events").delete().eq("id", str(event_id)).execute()
+        return self.get(event_id) is None
+
+    def delete_hard_atomic(self, event_id: UUID) -> bool:
+        return bool(
+            self._client.rpc(
+                "delete_event_hard_atomic", {"p_event_id": str(event_id)}
+            ).execute().data
+        )
 
     def list_published_upcoming(self, now: datetime) -> list[dict[str, object]]:
         return (
@@ -72,14 +92,14 @@ class EventRepository:
         )
         return response.data[0] if response.data else None
 
-    def active_registration_counts(self, event_ids: list[UUID]) -> dict[UUID, int]:
+    def approved_registration_counts(self, event_ids: list[UUID]) -> dict[UUID, int]:
         if not event_ids:
             return {}
         response = (
             self._client.table("registrations")
             .select("event_id")
             .in_("event_id", [str(event_id) for event_id in event_ids])
-            .eq("status", "active")
+            .eq("status", "approved")
             .execute()
         )
         counts: dict[UUID, int] = {}

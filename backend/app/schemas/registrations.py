@@ -23,3 +23,8 @@ class RegistrationResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     event: RegistrationEventSummary
+
+
+class CurrentRegistrationResponse(BaseModel):
+    registration_id: UUID | None = None
+    status: RegistrationStatus | None = None

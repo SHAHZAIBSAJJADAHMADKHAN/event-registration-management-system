@@ -35,7 +35,7 @@ class InMemoryRegistrationRepository:
         self.capacity = 2
         self.atomic_calls = 0
 
-    def create_atomic(self, event_id: UUID, attendee_id: UUID) -> dict[str, object]:
+    def create_request_atomic(self, event_id: UUID, attendee_id: UUID) -> dict[str, object]:
         self.atomic_calls += 1
         if event_id in self.failures:
             raise RegistrationDatabaseError("P0001", self.failures[event_id])
@@ -44,11 +44,11 @@ class InMemoryRegistrationRepository:
         if any(
             row["event_id"] == str(event_id)
             and row["attendee_id"] == str(attendee_id)
-            and row["status"] == "active"
+            and row["status"] in {"pending", "approved"}
             for row in self.registrations.values()
         ):
             raise RegistrationDatabaseError("P0001", "An active registration already exists for this event")
-        if self.active_count(event_id) >= self.capacity:
+        if self.approved_count(event_id) >= self.capacity:
             raise RegistrationDatabaseError("P0001", "Event capacity has been reached")
         registration_id = uuid4()
         now = datetime.now(timezone.utc).isoformat()
@@ -56,7 +56,7 @@ class InMemoryRegistrationRepository:
             "id": str(registration_id),
             "event_id": str(event_id),
             "attendee_id": str(attendee_id),
-            "status": "active",
+            "status": "pending",
             "created_at": now,
             "updated_at": now,
         }
@@ -75,9 +75,9 @@ class InMemoryRegistrationRepository:
             if row["attendee_id"] == str(attendee_id)
         ]
 
-    def cancel_owned_active(self, registration_id: UUID, attendee_id: UUID):
+    def cancel_owned_open(self, registration_id: UUID, attendee_id: UUID):
         row = self.get_owned(registration_id, attendee_id)
-        if row is None or row["status"] != "active":
+        if row is None or row["status"] not in {"pending", "approved"}:
             return None
         row["status"] = "cancelled"
         row["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -86,9 +86,9 @@ class InMemoryRegistrationRepository:
     def get_events(self, event_ids: list[UUID]):
         return {event_id: self.events[event_id] for event_id in event_ids if event_id in self.events}
 
-    def active_count(self, event_id: UUID) -> int:
+    def approved_count(self, event_id: UUID) -> int:
         return sum(
-            row["event_id"] == str(event_id) and row["status"] == "active"
+            row["event_id"] == str(event_id) and row["status"] == "approved"
             for row in self.registrations.values()
         )
 
@@ -114,7 +114,7 @@ def test_successful_registration_and_my_registration_history(
     created = attendee_client.post(f"/api/events/{event_id}/registrations")
     assert created.status_code == 201
     registration = created.json()
-    assert registration["status"] == "active"
+    assert registration["status"] == "pending"
     assert registration["event"]["title"] == "Future workshop"
     assert registration_service._repository.atomic_calls == 1
 
@@ -135,7 +135,8 @@ def test_duplicate_and_full_registration_are_rejected(
 
     registration_service._repository.registrations.clear()
     registration_service._repository.capacity = 1
-    registration_service._repository.create_atomic(event_id, ATTENDEE_B.id)
+    approved = registration_service._repository.create_request_atomic(event_id, ATTENDEE_B.id)
+    approved["status"] = "approved"
     full = attendee_client.post(f"/api/events/{event_id}/registrations")
     assert full.status_code == 409
     assert full.json()["error"]["code"] == "event_full"
@@ -166,33 +167,34 @@ def test_cancellation_preserves_history_releases_capacity_and_cannot_repeat(
 ) -> None:
     event_id = registration_service._repository.event_id
     created = attendee_client.post(f"/api/events/{event_id}/registrations").json()
-    assert registration_service._repository.active_count(event_id) == 1
+    registration_service._repository.registrations[UUID(created["id"])]["status"] = "approved"
+    assert registration_service._repository.approved_count(event_id) == 1
 
     cancelled = attendee_client.patch(f"/api/me/registrations/{created['id']}/cancel")
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] == "cancelled"
-    assert registration_service._repository.active_count(event_id) == 0
+    assert registration_service._repository.approved_count(event_id) == 0
 
     repeated = attendee_client.patch(f"/api/me/registrations/{created['id']}/cancel")
     assert repeated.status_code == 409
-    assert repeated.json()["error"]["code"] == "registration_already_cancelled"
+    assert repeated.json()["error"]["code"] == "registration_not_cancellable"
 
     replacement = attendee_client.post(f"/api/events/{event_id}/registrations")
     assert replacement.status_code == 201
-    assert registration_service._repository.active_count(event_id) == 1
+    assert registration_service._repository.approved_count(event_id) == 0
 
 
 def test_attendee_cannot_read_or_cancel_another_attendees_registration(
     attendee_client: TestClient, registration_service: RegistrationService
 ) -> None:
     event_id = registration_service._repository.event_id
-    other = registration_service._repository.create_atomic(event_id, ATTENDEE_B.id)
+    other = registration_service._repository.create_request_atomic(event_id, ATTENDEE_B.id)
 
     detail = attendee_client.get(f"/api/me/registrations/{other['id']}")
     cancel = attendee_client.patch(f"/api/me/registrations/{other['id']}/cancel")
     assert detail.status_code == 404
     assert cancel.status_code == 404
-    assert registration_service._repository.get_owned(UUID(other["id"]), ATTENDEE_B.id)["status"] == "active"
+    assert registration_service._repository.get_owned(UUID(other["id"]), ATTENDEE_B.id)["status"] == "pending"
 
 
 def test_unauthenticated_and_non_attendee_registration_access_is_rejected(

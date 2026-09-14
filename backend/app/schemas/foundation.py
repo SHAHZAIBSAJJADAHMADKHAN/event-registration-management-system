@@ -13,7 +13,9 @@ class EventStatus(StrEnum):
 
 
 class RegistrationStatus(StrEnum):
-    ACTIVE = "active"
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
     CANCELLED = "cancelled"
 
 

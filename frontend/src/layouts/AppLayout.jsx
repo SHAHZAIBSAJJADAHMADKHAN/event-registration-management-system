@@ -1,8 +1,9 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { NotificationBell } from "../components/NotificationBell";
 
 const linksFor = (role) => role === "admin"
-  ? [["/admin/dashboard", "Dashboard"], ["/admin/events", "Events"], ["/admin/reports", "Reports"]]
+  ? [["/admin/dashboard", "Dashboard"], ["/admin/events", "Events"], ["/admin/registration-requests", "Registration Requests"], ["/admin/reports", "Reports"]]
   : [["/events", "Events"], ["/my-registrations", "My registrations"]];
 
 export function AppLayout() {
@@ -15,6 +16,7 @@ export function AppLayout() {
       <NavLink className="brand" to={profile.role === "admin" ? "/admin/dashboard" : "/events"}>N<span>•</span> Events</NavLink>
       <nav aria-label="Primary navigation">{links.map(([path, label]) => <NavLink key={path} to={path}>{label}</NavLink>)}</nav>
       <div className="account-menu">
+        <NotificationBell />
         <span className="account-name">{profile.full_name}</span>
         <span className="role-badge">{profile.role}</span>
         <button className="button button--text" onClick={handleSignOut}>Sign out</button>

@@ -49,7 +49,7 @@ class InMemoryDiscoveryRepository:
                 return item
         return None
 
-    def active_registration_counts(self, event_ids: list[UUID]) -> dict[UUID, int]:
+    def approved_registration_counts(self, event_ids: list[UUID]) -> dict[UUID, int]:
         return {event_id: self.counts.get(event_id, 0) for event_id in event_ids}
 
 

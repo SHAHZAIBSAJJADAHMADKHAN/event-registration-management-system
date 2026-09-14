@@ -31,7 +31,7 @@ class InMemoryAdminOperationsRepository:
         self.registrations = [
             {
                 "id": str(uuid4()), "event_id": str(self.event_id),
-                "attendee_id": str(self.active_attendee_id), "status": "active", "created_at": now,
+                "attendee_id": str(self.active_attendee_id), "status": "approved", "created_at": now,
             },
             {
                 "id": str(uuid4()), "event_id": str(self.event_id),
@@ -39,7 +39,7 @@ class InMemoryAdminOperationsRepository:
             },
             {
                 "id": str(uuid4()), "event_id": str(self.other_event_id),
-                "attendee_id": str(uuid4()), "status": "active", "created_at": now,
+                "attendee_id": str(uuid4()), "status": "approved", "created_at": now,
             },
         ]
         self.profile_data = {
@@ -91,10 +91,10 @@ def test_admin_attendee_list_filters_and_search(admin_client: TestClient, operat
     event_id = operations_service._repository.event_id
     response = admin_client.get(f"/api/admin/events/{event_id}/attendees")
     assert response.status_code == 200
-    assert {row["registration_status"] for row in response.json()} == {"active", "cancelled"}
+    assert {row["registration_status"] for row in response.json()} == {"approved", "cancelled"}
     assert response.json()[0]["attendee_email"] == "alice@example.test"
 
-    active = admin_client.get(f"/api/admin/events/{event_id}/attendees?status=active")
+    active = admin_client.get(f"/api/admin/events/{event_id}/attendees?status=approved")
     assert active.status_code == 200
     assert [row["attendee_name"] for row in active.json()] == ["Alice Attendee"]
 
@@ -140,7 +140,7 @@ def test_check_in_and_csv_export_are_practical_and_safe(
     event_id = operations_service._repository.event_id
     check_in = admin_client.get(f"/api/admin/events/{event_id}/check-in")
     assert check_in.status_code == 200
-    assert [row["registration_status"] for row in check_in.json()] == ["active"]
+    assert [row["registration_status"] for row in check_in.json()] == ["approved"]
 
     csv_export = admin_client.get(f"/api/admin/events/{event_id}/attendees/export.csv")
     assert csv_export.status_code == 200
@@ -190,7 +190,7 @@ def test_attendee_is_denied_operational_data(operations_service: AdminOperations
 def test_csv_neutralizes_spreadsheet_formula_cells() -> None:
     event_id = uuid4()
     row = AdminAttendeeRegistration(
-        registration_id=uuid4(), registration_status=RegistrationStatus.ACTIVE,
+        registration_id=uuid4(), registration_status=RegistrationStatus.APPROVED,
         registered_at=datetime(2030, 1, 1, tzinfo=timezone.utc), attendee_id=uuid4(),
         attendee_name="=unsafe", attendee_email="person@example.test",
         event_id=event_id, event_title="Town Hall",

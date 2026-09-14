@@ -66,7 +66,7 @@ class AdminOperationsService:
     def operational_summary(self, event_id: UUID) -> EventOperationalSummary:
         event = self._event_or_404(event_id)
         registrations = self._repository.list_event_registrations(event_id)
-        active = sum(row["status"] == RegistrationStatus.ACTIVE.value for row in registrations)
+        active = sum(row["status"] == RegistrationStatus.APPROVED.value for row in registrations)
         cancelled = sum(row["status"] == RegistrationStatus.CANCELLED.value for row in registrations)
         capacity = int(event["capacity"])
         return EventOperationalSummary(
@@ -84,7 +84,7 @@ class AdminOperationsService:
         active_by_event: dict[str, int] = {}
         active_registrations = 0
         for registration in registrations:
-            if registration["status"] == RegistrationStatus.ACTIVE.value:
+            if registration["status"] == RegistrationStatus.APPROVED.value:
                 active_registrations += 1
                 event_id = str(registration["event_id"])
                 active_by_event[event_id] = active_by_event.get(event_id, 0) + 1
@@ -103,20 +103,20 @@ class AdminOperationsService:
         registrations = self._repository.list_registrations()
         counts: dict[str, dict[str, int]] = {}
         for registration in registrations:
-            event_counts = counts.setdefault(str(registration["event_id"]), {"active": 0, "cancelled": 0})
+            event_counts = counts.setdefault(str(registration["event_id"]), {"approved": 0, "cancelled": 0})
             if registration["status"] in event_counts:
                 event_counts[registration["status"]] += 1
         rows = []
         for event in self._repository.list_events():
-            event_counts = counts.get(str(event["id"]), {"active": 0, "cancelled": 0})
+            event_counts = counts.get(str(event["id"]), {"approved": 0, "cancelled": 0})
             capacity = int(event["capacity"])
             rows.append(AdminEventReportRow(
                 event_id=event["id"], event_title=str(event["title"]), starts_at=event["starts_at"],
                 location=str(event["location"]), status=str(event["status"]), capacity=capacity,
-                active_registrations=event_counts["active"], cancelled_registrations=event_counts["cancelled"],
-                remaining_availability=max(capacity - event_counts["active"], 0),
+                active_registrations=event_counts["approved"], cancelled_registrations=event_counts["cancelled"],
+                remaining_availability=max(capacity - event_counts["approved"], 0),
             ))
         return rows
 
     def check_in_report(self, event_id: UUID) -> list[AdminAttendeeRegistration]:
-        return self._attendee_rows(event_id, RegistrationStatus.ACTIVE)
+        return self._attendee_rows(event_id, RegistrationStatus.APPROVED)

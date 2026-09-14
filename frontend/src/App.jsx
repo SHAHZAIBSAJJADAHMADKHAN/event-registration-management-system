@@ -10,6 +10,7 @@ import { AdminEventsPage } from "./pages/AdminEventsPage";
 import { AdminAttendeesPage } from "./pages/AdminAttendeesPage";
 import { AdminDashboardPage } from "./pages/AdminDashboardPage";
 import { AdminReportsPage } from "./pages/AdminReportsPage";
+import { AdminRegistrationRequestsPage } from "./pages/AdminRegistrationRequestsPage";
 import { SignInPage } from "./pages/SignInPage";
 import { SignUpPage } from "./pages/SignUpPage";
 
@@ -28,6 +29,7 @@ export default function App() {
       <Route path="/admin/events" element={<AdminEventsPage />} />
       <Route path="/admin/events/:eventId/attendees" element={<AdminAttendeesPage />} />
       <Route path="/admin/reports" element={<AdminReportsPage />} />
+      <Route path="/admin/registration-requests" element={<AdminRegistrationRequestsPage />} />
     </Route></Route>
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></AuthProvider></BrowserRouter>;

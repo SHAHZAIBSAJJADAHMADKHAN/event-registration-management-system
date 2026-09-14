@@ -30,7 +30,7 @@ class EventDiscoveryService:
     def list_upcoming(self) -> list[DiscoverableEventResponse]:
         now = datetime.now(timezone.utc)
         events = self._repository.list_published_upcoming(now)
-        counts = self._repository.active_registration_counts(
+        counts = self._repository.approved_registration_counts(
             [UUID(str(event["id"])) for event in events]
         )
         return [
@@ -42,5 +42,5 @@ class EventDiscoveryService:
         event = self._repository.get_published_upcoming(event_id, datetime.now(timezone.utc))
         if event is None:
             raise APIError(404, "event_not_found", "The event is not available.")
-        count = self._repository.active_registration_counts([event_id]).get(event_id, 0)
+        count = self._repository.approved_registration_counts([event_id]).get(event_id, 0)
         return self._response(event, count)

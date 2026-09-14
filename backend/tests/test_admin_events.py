@@ -18,6 +18,10 @@ class InMemoryEventRepository:
     def __init__(self) -> None:
         self.events: dict[UUID, dict[str, object]] = {}
         self.active_counts: dict[UUID, int] = {}
+        self.registration_counts: dict[UUID, int] = {}
+        self.registrations: dict[UUID, UUID] = {}
+        self.notifications: list[dict[str, UUID | None]] = []
+        self.delete_failure = False
 
     def create(self, values: dict[str, object]) -> dict[str, object]:
         event_id = uuid4()
@@ -40,8 +44,31 @@ class InMemoryEventRepository:
         event["updated_at"] = datetime.now(timezone.utc).isoformat()
         return event
 
-    def count_active_registrations(self, event_id: UUID) -> int:
+    def count_approved_registrations(self, event_id: UUID) -> int:
         return self.active_counts.get(event_id, 0)
+
+    def count_registrations(self, event_id: UUID) -> int:
+        return self.registration_counts.get(event_id, 0)
+
+    def delete(self, event_id: UUID) -> bool:
+        return self.events.pop(event_id, None) is not None
+
+    def add_related_data(self, event_id: UUID) -> UUID:
+        registration_id = uuid4()
+        self.registrations[registration_id] = event_id
+        self.notifications.extend([
+            {"event_id": event_id, "registration_id": None},
+            {"event_id": None, "registration_id": registration_id},
+        ])
+        return registration_id
+
+    def delete_hard_atomic(self, event_id: UUID) -> bool:
+        if self.delete_failure:
+            raise RuntimeError("simulated database failure")
+        registration_ids = {registration_id for registration_id, related_event_id in self.registrations.items() if related_event_id == event_id}
+        self.notifications = [notification for notification in self.notifications if notification["event_id"] != event_id and notification["registration_id"] not in registration_ids]
+        self.registrations = {registration_id: related_event_id for registration_id, related_event_id in self.registrations.items() if related_event_id != event_id}
+        return self.events.pop(event_id, None) is not None
 
     def list_published_upcoming(self, now: datetime) -> list[dict[str, object]]:
         return [
@@ -51,7 +78,7 @@ class InMemoryEventRepository:
             and datetime.fromisoformat(str(event["starts_at"])) > now
         ]
 
-    def active_registration_counts(self, event_ids: list[UUID]) -> dict[UUID, int]:
+    def approved_registration_counts(self, event_ids: list[UUID]) -> dict[UUID, int]:
         return {event_id: self.active_counts.get(event_id, 0) for event_id in event_ids}
 
 
@@ -130,7 +157,9 @@ def test_unauthenticated_and_attendee_requests_are_rejected(event_service: Event
     app.dependency_overrides[get_event_service] = lambda: event_service
     with TestClient(app) as client:
         unauthenticated = client.post("/api/admin/events", json=payload())
+        unauthenticated_delete = client.delete(f"/api/admin/events/{uuid4()}")
     assert unauthenticated.status_code == 401
+    assert unauthenticated_delete.status_code == 401
     app.dependency_overrides.clear()
 
     app.dependency_overrides[require_authenticated_user] = lambda: ATTENDEE
@@ -139,10 +168,12 @@ def test_unauthenticated_and_attendee_requests_are_rejected(event_service: Event
         attendee_draft = client.post("/api/admin/events", json=payload(status="draft"))
         attendee_published = client.post("/api/admin/events", json=payload(status="published"))
         attendee_update = client.patch(f"/api/admin/events/{uuid4()}", json={"capacity": 10})
+        attendee_delete = client.delete(f"/api/admin/events/{uuid4()}")
     app.dependency_overrides.clear()
     assert attendee_draft.status_code == 403
     assert attendee_published.status_code == 403
     assert attendee_update.status_code == 403
+    assert attendee_delete.status_code == 403
 
 
 @pytest.mark.parametrize(
@@ -205,4 +236,51 @@ def test_capacity_cannot_be_reduced_below_active_registration_count(event_servic
     with pytest.raises(APIError) as error:
         event_service.update(created.id, EventUpdate(capacity=2))
     assert error.value.status_code == 409
-    assert error.value.code == "capacity_below_active_registrations"
+    assert error.value.code == "capacity_below_approved_registrations"
+
+
+def test_admin_hard_deletes_draft_and_cancelled_events(admin_client: TestClient) -> None:
+    draft = admin_client.post("/api/admin/events", json=payload()).json()
+    deleted = admin_client.delete(f"/api/admin/events/{draft['id']}")
+    assert deleted.status_code == 200
+    assert deleted.json() == {"deleted": True}
+    assert admin_client.get(f"/api/admin/events/{draft['id']}").status_code == 404
+
+    cancelled = admin_client.post("/api/admin/events", json=payload()).json()
+    assert admin_client.patch(f"/api/admin/events/{cancelled['id']}/status", json={"status": "cancelled"}).status_code == 200
+    assert admin_client.delete(f"/api/admin/events/{cancelled['id']}").status_code == 200
+
+
+def test_hard_delete_removes_related_data_for_all_event_states_and_preserves_unrelated_data(admin_client: TestClient, event_service: EventService) -> None:
+    repository = event_service._repository
+    unrelated_event = admin_client.post("/api/admin/events", json=payload()).json()
+    unrelated_event_id = UUID(unrelated_event["id"])
+    unrelated_registration = repository.add_related_data(unrelated_event_id)
+
+    for lifecycle in ("draft", "published", "completed", "cancelled"):
+        created = admin_client.post("/api/admin/events", json=payload(status="published" if lifecycle in {"published", "completed"} else "draft")).json()
+        if lifecycle == "completed":
+            assert admin_client.patch(f"/api/admin/events/{created['id']}/status", json={"status": "completed"}).status_code == 200
+        if lifecycle == "cancelled":
+            assert admin_client.patch(f"/api/admin/events/{created['id']}/status", json={"status": "cancelled"}).status_code == 200
+        event_id = UUID(created["id"])
+        related_registration = repository.add_related_data(event_id)
+        assert admin_client.delete(f"/api/admin/events/{created['id']}").status_code == 200
+        assert event_id not in repository.events
+        assert related_registration not in repository.registrations
+        assert all(notification["event_id"] != event_id and notification["registration_id"] != related_registration for notification in repository.notifications)
+
+    assert unrelated_event_id in repository.events
+    assert unrelated_registration in repository.registrations
+    assert any(notification["registration_id"] == unrelated_registration for notification in repository.notifications)
+
+
+def test_hard_delete_missing_and_rpc_failure_return_safe_errors(admin_client: TestClient, event_service: EventService) -> None:
+    missing = admin_client.delete(f"/api/admin/events/{uuid4()}")
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "event_not_found"
+    event = admin_client.post("/api/admin/events", json=payload()).json()
+    event_service._repository.delete_failure = True
+    failed = admin_client.delete(f"/api/admin/events/{event['id']}")
+    assert failed.status_code == 503
+    assert failed.json()["error"]["code"] == "event_delete_failed"

@@ -7,6 +7,7 @@ from app.database.events import EventRepository
 from app.schemas.auth import AuthenticatedUser
 from app.schemas.events import EventCreate, EventResponse, EventStatusTransition, EventUpdate
 from app.schemas.foundation import EventStatus
+from postgrest.exceptions import APIError as PostgrestAPIError
 
 
 _ALLOWED_TRANSITIONS: dict[EventStatus, set[EventStatus]] = {
@@ -44,12 +45,12 @@ class EventService:
         values = payload.model_dump(mode="json", exclude_unset=True)
 
         if "capacity" in values:
-            active_count = self._repository.count_active_registrations(event_id)
-            if values["capacity"] < active_count:
+            approved_count = self._repository.count_approved_registrations(event_id)
+            if values["capacity"] < approved_count:
                 raise APIError(
                     409,
-                    "capacity_below_active_registrations",
-                    "Capacity cannot be lower than active registrations.",
+                    "capacity_below_approved_registrations",
+                    "Capacity cannot be lower than approved registrations.",
                 )
 
         updated = self._repository.update(event_id, values)
@@ -73,3 +74,18 @@ class EventService:
         if updated is None:
             raise APIError(404, "event_not_found", "The event does not exist.")
         return self._response(updated)
+
+    def delete(self, event_id: UUID) -> None:
+        # Provides a stable 404 contract while the RPC repeats the existence
+        # check inside its transaction to protect against races.
+        self.get(event_id)
+        try:
+            deleted = self._repository.delete_hard_atomic(event_id)
+        except PostgrestAPIError as error:
+            if "not found" in error.message.lower():
+                raise APIError(404, "event_not_found", "This event could not be found.") from error
+            raise APIError(503, "event_delete_failed", "This event could not be deleted.") from error
+        except Exception as error:
+            raise APIError(503, "event_delete_failed", "This event could not be deleted.") from error
+        if not deleted:
+            raise APIError(503, "event_delete_failed", "This event could not be deleted.")

@@ -10,6 +10,8 @@ from fastapi.responses import Response
 
 from app.core.config import Settings, get_settings
 from app.database.admin_operations import AdminOperationsRepository
+from app.database.registrations import RegistrationRepository
+from app.database.notifications import NotificationRepository
 from app.dependencies.auth import require_admin
 from app.schemas.admin_operations import (
     AdminAttendeeRegistration,
@@ -20,6 +22,8 @@ from app.schemas.admin_operations import (
 from app.schemas.auth import AuthenticatedUser
 from app.schemas.foundation import RegistrationStatus
 from app.services.admin_operations import AdminOperationsService
+from app.services.admin_registrations import AdminRegistrationService
+from app.services.notifications import NotificationService
 
 router = APIRouter(prefix="/admin", tags=["admin operations"])
 
@@ -28,6 +32,21 @@ def get_admin_operations_service(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AdminOperationsService:
     return AdminOperationsService(AdminOperationsRepository(settings))
+
+def get_admin_registration_service(settings: Annotated[Settings, Depends(get_settings)]) -> AdminRegistrationService:
+    return AdminRegistrationService(RegistrationRepository(settings), NotificationService(NotificationRepository(settings)))
+
+@router.get("/registration-requests")
+async def registration_requests(_: Annotated[AuthenticatedUser, Depends(require_admin)], service: Annotated[AdminRegistrationService, Depends(get_admin_registration_service)], status: RegistrationStatus | None = Query(default=RegistrationStatus.PENDING), event_id: UUID | None = None):
+    return service.list_requests(status.value if status else None, event_id)
+
+@router.post("/registration-requests/{registration_id}/approve")
+async def approve_request(registration_id: UUID, _: Annotated[AuthenticatedUser, Depends(require_admin)], service: Annotated[AdminRegistrationService, Depends(get_admin_registration_service)]):
+    return service.approve(registration_id)
+
+@router.post("/registration-requests/{registration_id}/reject")
+async def reject_request(registration_id: UUID, _: Annotated[AuthenticatedUser, Depends(require_admin)], service: Annotated[AdminRegistrationService, Depends(get_admin_registration_service)]):
+    return service.reject(registration_id)
 
 
 def _csv_cell(value: object) -> object:
