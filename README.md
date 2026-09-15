@@ -1,76 +1,172 @@
 # Event Registration & Management System
 
-Nowshera Events Co. is a React, FastAPI, and Supabase platform for secure event discovery, registration, capacity control, attendee operations, and reporting.
+A full-stack event operations platform built for Nowshera Events Co. It centralizes event discovery, registration requests, attendee operations, approvals, reporting, and capacity management for attendees and administrators.
 
-## Current status
+> The application is deployed, tested, and ready for production use.
 
-Phases 1–12 are implemented locally: authentication and role authorization, attendee event and registration workflows, admin event management, attendee check-in lists, dashboard totals, reports, and CSV export. Deployment remains intentionally out of scope.
+**🌐 [Live Demo](https://event-registration-management-syste-eight.vercel.app)**<br>
+**💻 [GitHub Repository](https://github.com/SHAHZAIBSAJJADAHMADKHAN/event-registration-management-system)**
+
+## Project Overview
+
+Nowshera Events Co. needed a structured alternative to managing events, registrations, attendee information, and operational updates across fragmented messaging and spreadsheets. This application provides one centralized platform: attendees can discover and request access to events, while administrators can manage the full event lifecycle, registration decisions, capacity, notifications, and reports.
+
+## Key Features
+
+### Attendee Experience
+
+- Secure signup, sign-in, sign-out, and protected routes
+- Supported email-provider validation for signup
+- Browse published and upcoming events with remaining capacity
+- View event details and submit registration requests
+- Review personal registrations and cancel eligible registrations
+- Receive persistent notifications about registration activity
+
+### Administrator Operations
+
+- Secure, role-protected administrator access and dashboard metrics
+- Create, edit, publish, complete, cancel, and permanently delete events where supported
+- Review pending registration requests and approve or reject them
+- View event attendees with search and status filtering
+- Manage operational capacity and check-in-friendly attendee views
+- Deliver registration-status notification workflows
+
+### Reporting and Export
+
+- Event-level operational reporting and summary CSV export
+- Detailed per-event attendee reports
+- Registration-status filters: All, Approved, Pending, Rejected, and Cancelled
+- Filter-aware CSV and PDF exports
+
+## Registration Workflow
+
+```text
+Attendee
+   ↓
+Registration Request
+   ↓
+Pending
+   ↓
+Admin Review
+   ↓
+Approved / Rejected
+```
+
+- Pending requests do not reserve event capacity.
+- Approved registrations consume capacity.
+- An eligible cancellation restores capacity.
+
+## Technology Stack
+
+| Area | Technologies |
+| --- | --- |
+| Frontend | React, Vite, JavaScript |
+| Backend | Python, FastAPI |
+| Database and authentication | Supabase, PostgreSQL, Supabase Auth |
+| Security | JWT authentication, server-side authorization, role-based access control, ownership checks |
+| Deployment | Vercel |
+| Development | Git, GitHub |
+| Testing | Vitest, Testing Library, pytest |
 
 ## Architecture
 
-React/Vite uses Supabase Auth for browser sessions and sends the user JWT to FastAPI. FastAPI verifies JWT signatures/issuer, resolves the role from the `profiles` table, and enforces role and ownership authorization server-side. Supabase PostgreSQL stores events, profiles, and registrations; atomic registration logic and database constraints protect capacity and duplicates.
-
-## Stack
-
-- Frontend: React, Vite, JavaScript
-- Backend: FastAPI, Python
-- Data/Auth: Supabase PostgreSQL and Supabase Auth
-- Testing: Vitest/Testing Library and pytest
-
-## Features
-
-- Attendee signup/sign-in/sign-out, protected routes, event discovery, registration, cancellation, and personal registrations
-- Admin event creation, editing, lifecycle transitions, attendee lists, search/filtering, check-in-friendly views, dashboard metrics, reports, and CSV export
-- Backend-enforced role authorization, registration ownership, active-only capacity accounting, duplicate prevention, and lifecycle validation
-
-## Local setup
-
-### Backend
-
-From `backend/`, copy `backend/.env.example` to ignored `backend/.env`, then provide local values:
-
-```powershell
-py -3.12 -m pip install -r requirements-dev.txt
-py -3.12 -m uvicorn app.main:app --reload --port 8000
+```text
+React Frontend
+      ↓
+FastAPI REST API
+      ↓
+Supabase / PostgreSQL
+      ↓
+Authentication + Application Data
 ```
 
-Required backend variables are `ENVIRONMENT`, `FRONTEND_ORIGIN`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_ISSUER`, and `SUPABASE_JWKS_URL`. `SUPABASE_SECRET_KEY` is backend-only.
+React/Vite uses Supabase Auth for browser sessions and sends the user JWT to FastAPI. The backend verifies JWT signatures and issuer details, resolves the authoritative role from the `profiles` table, and enforces role and ownership decisions server-side. Supabase PostgreSQL stores events, profiles, registrations, and notifications; application and database rules protect capacity and duplicate registrations.
 
-### Frontend
+## Security
 
-From `frontend/`, copy `frontend/.env.example` to ignored `frontend/.env`:
+- Supabase Auth manages browser authentication sessions.
+- FastAPI verifies JWTs before serving authenticated data.
+- Roles and administrator access are enforced on the server, not only in the interface.
+- Registration ownership checks prevent attendees from accessing another attendee's data.
+- Backend-only credentials remain server-side; no secrets are stored in this repository.
+- Browser-facing configuration uses only safe `VITE_*` variables. Backend secrets must never use that prefix.
+
+## Live Demo
+
+The deployed production application is available at:
+
+**[https://event-registration-management-syste-eight.vercel.app](https://event-registration-management-syste-eight.vercel.app)**
+
+Visitors can explore the deployed application without running it locally. Private test credentials and passwords are intentionally not included.
+
+## Local Development
+
+### 1. Clone the repository
 
 ```powershell
+git clone https://github.com/SHAHZAIBSAJJADAHMADKHAN/event-registration-management-system.git
+cd event-registration-management-system
+```
+
+### 2. Configure and start the backend
+
+From `backend/`, create an ignored `.env` file from `.env.example`, create a Python virtual environment, and install dependencies.
+
+```powershell
+cd backend
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+py -3.12 -m pip install -r requirements-dev.txt
+py -3.12 -m uvicorn app.main:app --reload --port 8001
+```
+
+The local API health endpoint is `http://localhost:8001/api/health`.
+
+### 3. Configure and start the frontend
+
+From `frontend/`, create an ignored `.env` file from `.env.example`. Configure the frontend API base URL for the backend's `/api` endpoint on port `8001`, then run:
+
+```powershell
+cd frontend
 npm install
 npm run dev
 ```
 
-Browser-safe variables are `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_API_BASE_URL`. Never put a Supabase secret key in a `VITE_*` variable.
+Open the Vite URL shown in the terminal, normally `http://localhost:5173`.
 
-## Tests
+## Environment Variables
+
+Create local `.env` files from the provided `.env.example` files. Use placeholder values only and never commit those files.
+
+| Scope | Variable names |
+| --- | --- |
+| Backend | `ENVIRONMENT`, `FRONTEND_ORIGIN`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_ISSUER`, `SUPABASE_JWKS_URL` |
+| Frontend | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_API_BASE_URL` |
+
+`SUPABASE_SECRET_KEY` is backend-only. Never expose it, use it in a `VITE_*` variable, or commit it to the repository.
+
+## Testing
+
+The project includes automated frontend and backend tests and has also undergone manual production verification.
 
 ```powershell
 # frontend/
-npm test -- --run
+npm test
 npm run build
 
 # backend/
 py -3.12 -m pytest -q
 ```
 
-## Deployment preparation
+## Deployment
 
-The intended production flow is **Vercel Services (Vite + FastAPI) → Supabase**. The application is prepared for deployment but no cloud service has been deployed yet.
+The application is deployed to Vercel and uses Supabase for database and authentication services.
 
-- Keep the Vercel project root at this repository root and select the **Services** framework setting.
-- `vercel.json` declares `frontend/` as the Vite service and `backend/` as the native FastAPI service.
-- Browser API requests use `VITE_API_BASE_URL=/api` in Vercel; the deployment routes that prefix to FastAPI while preserving existing backend routes.
-- Vercel receives browser-safe frontend variables plus backend runtime variables, including backend-only `SUPABASE_SECRET_KEY`. Never use a `VITE_*` prefix for the secret key.
-- Service-scoped SPA fallback preserves direct refreshes for client routes.
+**Production:** [https://event-registration-management-syste-eight.vercel.app](https://event-registration-management-syste-eight.vercel.app)
 
-See [deployment and handover](docs/deployment.md) for the full environment-variable, Supabase redirect URL, smoke-test, test-credential, and final-delivery checklist.
+Production browser requests use the application API path while FastAPI retains server-side JWT verification and authorization. Service-scoped SPA fallback supports direct refreshes of attendee and administrator routes.
 
-## Documentation
+## Project Documentation
 
 - [Requirements](docs/requirements.md)
 - [Architecture](docs/architecture.md)
@@ -80,3 +176,12 @@ See [deployment and handover](docs/deployment.md) for the full environment-varia
 - [Admin event management](docs/admin-event-management.md)
 - [Registration lifecycle](docs/registration-lifecycle.md)
 - [Admin operations](docs/admin-operations.md)
+- [Deployment and handover](docs/deployment.md)
+
+## Author
+
+**Shahzaib Sajjad Ahmad Khan**<br>
+BS Software Engineering Student<br>
+AI Automation & Full-Stack Development
+
+GitHub: [github.com/SHAHZAIBSAJJADAHMADKHAN](https://github.com/SHAHZAIBSAJJADAHMADKHAN)
