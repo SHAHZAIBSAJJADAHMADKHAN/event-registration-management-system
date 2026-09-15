@@ -12,11 +12,19 @@ from app.schemas.admin_operations import (
     EventOperationalSummary,
 )
 from app.schemas.foundation import RegistrationStatus
+from app.services.lifecycle import EventLifecycleService
 
 
 class AdminOperationsService:
-    def __init__(self, repository: AdminOperationsRepository) -> None:
+    def __init__(
+        self, repository: AdminOperationsRepository, lifecycle: EventLifecycleService | None = None
+    ) -> None:
         self._repository = repository
+        self._lifecycle = lifecycle
+
+    def _reconcile_overdue_events(self) -> None:
+        if self._lifecycle is not None:
+            self._lifecycle.reconcile_overdue_events()
 
     def _event_or_404(self, event_id: UUID) -> dict[str, object]:
         event = self._repository.get_event(event_id)
@@ -80,6 +88,7 @@ class AdminOperationsService:
         )
 
     def detailed_event_report(self, event_id: UUID) -> AdminEventDetailedReport:
+        self._reconcile_overdue_events()
         event = self._event_or_404(event_id)
         registrations = self._repository.list_event_registrations(event_id)
         counts = {status: 0 for status in RegistrationStatus}
@@ -120,6 +129,7 @@ class AdminOperationsService:
         )
 
     def event_report(self) -> list[AdminEventReportRow]:
+        self._reconcile_overdue_events()
         registrations = self._repository.list_registrations()
         counts: dict[str, dict[str, int]] = {}
         for registration in registrations:

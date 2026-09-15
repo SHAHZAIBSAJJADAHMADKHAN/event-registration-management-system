@@ -10,6 +10,7 @@ from fastapi.responses import Response
 
 from app.core.config import Settings, get_settings
 from app.database.admin_operations import AdminOperationsRepository
+from app.database.lifecycle import EventLifecycleRepository
 from app.database.registrations import RegistrationRepository
 from app.database.notifications import NotificationRepository
 from app.dependencies.auth import require_admin
@@ -25,6 +26,7 @@ from app.schemas.foundation import RegistrationStatus
 from app.services.admin_operations import AdminOperationsService
 from app.services.admin_registrations import AdminRegistrationService
 from app.services.notifications import NotificationService
+from app.services.lifecycle import EventLifecycleService
 
 router = APIRouter(prefix="/admin", tags=["admin operations"])
 
@@ -32,10 +34,17 @@ router = APIRouter(prefix="/admin", tags=["admin operations"])
 def get_admin_operations_service(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AdminOperationsService:
-    return AdminOperationsService(AdminOperationsRepository(settings))
+    return AdminOperationsService(
+        AdminOperationsRepository(settings),
+        EventLifecycleService(EventLifecycleRepository(settings)),
+    )
 
 def get_admin_registration_service(settings: Annotated[Settings, Depends(get_settings)]) -> AdminRegistrationService:
-    return AdminRegistrationService(RegistrationRepository(settings), NotificationService(NotificationRepository(settings)))
+    return AdminRegistrationService(
+        RegistrationRepository(settings),
+        NotificationService(NotificationRepository(settings)),
+        EventLifecycleService(EventLifecycleRepository(settings)),
+    )
 
 @router.get("/registration-requests")
 async def registration_requests(_: Annotated[AuthenticatedUser, Depends(require_admin)], service: Annotated[AdminRegistrationService, Depends(get_admin_registration_service)], status: RegistrationStatus | None = Query(default=RegistrationStatus.PENDING), event_id: UUID | None = None):

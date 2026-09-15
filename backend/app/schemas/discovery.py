@@ -13,6 +13,7 @@ class DiscoverableEventResponse(BaseModel):
     title: str
     description: str
     starts_at: datetime
+    ends_at: datetime | None = None
     location: str
     capacity: int
     active_registration_count: int

@@ -6,11 +6,19 @@ from uuid import UUID
 from app.core.errors import APIError
 from app.database.events import EventRepository
 from app.schemas.discovery import DiscoverableEventResponse
+from app.services.lifecycle import EventLifecycleService
 
 
 class EventDiscoveryService:
-    def __init__(self, repository: EventRepository) -> None:
+    def __init__(
+        self, repository: EventRepository, lifecycle: EventLifecycleService | None = None
+    ) -> None:
         self._repository = repository
+        self._lifecycle = lifecycle
+
+    def _reconcile_overdue_events(self) -> None:
+        if self._lifecycle is not None:
+            self._lifecycle.reconcile_overdue_events()
 
     @staticmethod
     def _response(event: dict[str, object], active_count: int) -> DiscoverableEventResponse:
@@ -20,6 +28,7 @@ class EventDiscoveryService:
             title=event["title"],
             description=event["description"],
             starts_at=event["starts_at"],
+            ends_at=event.get("ends_at"),
             location=event["location"],
             capacity=capacity,
             active_registration_count=active_count,
@@ -28,6 +37,7 @@ class EventDiscoveryService:
         )
 
     def list_upcoming(self) -> list[DiscoverableEventResponse]:
+        self._reconcile_overdue_events()
         now = datetime.now(timezone.utc)
         events = self._repository.list_published_upcoming(now)
         counts = self._repository.approved_registration_counts(
@@ -39,6 +49,7 @@ class EventDiscoveryService:
         ]
 
     def get_upcoming(self, event_id: UUID) -> DiscoverableEventResponse:
+        self._reconcile_overdue_events()
         event = self._repository.get_published_upcoming(event_id, datetime.now(timezone.utc))
         if event is None:
             raise APIError(404, "event_not_found", "The event is not available.")

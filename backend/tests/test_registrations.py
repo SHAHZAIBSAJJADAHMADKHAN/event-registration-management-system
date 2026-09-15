@@ -26,6 +26,7 @@ class InMemoryRegistrationRepository:
                 "id": str(self.event_id),
                 "title": "Future workshop",
                 "starts_at": "2030-01-01T10:00:00Z",
+                "ends_at": "2030-01-01T12:00:00Z",
                 "location": "Nowshera Hall",
                 "status": "published",
             }
@@ -183,6 +184,42 @@ def test_cancellation_preserves_history_releases_capacity_and_cannot_repeat(
     assert replacement.status_code == 201
     assert registration_service._repository.approved_count(event_id) == 0
 
+
+@pytest.mark.parametrize("status", ["completed", "cancelled"])
+def test_completed_and_cancelled_events_block_cancellation_without_changing_history_or_capacity(
+    attendee_client: TestClient, registration_service: RegistrationService, status: str
+) -> None:
+    event_id = registration_service._repository.event_id
+    created = attendee_client.post(f"/api/events/{event_id}/registrations").json()
+    registration = registration_service._repository.registrations[UUID(created["id"])]
+    registration["status"] = "approved"
+    registration_service._repository.events[event_id]["status"] = status
+    before_capacity = registration_service._repository.approved_count(event_id)
+
+    blocked = attendee_client.patch(f"/api/me/registrations/{created['id']}/cancel")
+
+    assert blocked.status_code == 409
+    assert blocked.json()["error"]["code"] == "event_cancellation_closed"
+    assert registration["status"] == "approved"
+    assert registration_service._repository.approved_count(event_id) == before_capacity
+
+
+def test_ended_published_event_blocks_cancellation_without_changing_history_or_capacity(
+    attendee_client: TestClient, registration_service: RegistrationService
+) -> None:
+    event_id = registration_service._repository.event_id
+    created = attendee_client.post(f"/api/events/{event_id}/registrations").json()
+    registration = registration_service._repository.registrations[UUID(created["id"])]
+    registration["status"] = "approved"
+    registration_service._repository.events[event_id]["ends_at"] = "2000-01-01T12:00:00Z"
+    before_capacity = registration_service._repository.approved_count(event_id)
+
+    blocked = attendee_client.patch(f"/api/me/registrations/{created['id']}/cancel")
+
+    assert blocked.status_code == 409
+    assert blocked.json()["error"]["code"] == "event_cancellation_closed"
+    assert registration["status"] == "approved"
+    assert registration_service._repository.approved_count(event_id) == before_capacity
 
 def test_attendee_cannot_read_or_cancel_another_attendees_registration(
     attendee_client: TestClient, registration_service: RegistrationService

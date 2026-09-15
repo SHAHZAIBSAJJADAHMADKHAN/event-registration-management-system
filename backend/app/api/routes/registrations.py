@@ -7,11 +7,13 @@ from fastapi import APIRouter, Depends, status
 
 from app.core.config import Settings, get_settings
 from app.database.registrations import RegistrationRepository
+from app.database.lifecycle import EventLifecycleRepository
 from app.database.notifications import NotificationRepository
 from app.dependencies.auth import require_attendee
 from app.schemas.auth import AuthenticatedUser
 from app.schemas.registrations import CurrentRegistrationResponse, RegistrationResponse
 from app.services.registrations import RegistrationService
+from app.services.lifecycle import EventLifecycleService
 from app.services.notifications import NotificationService
 
 router = APIRouter(tags=["registrations"])
@@ -20,7 +22,11 @@ router = APIRouter(tags=["registrations"])
 def get_registration_service(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> RegistrationService:
-    return RegistrationService(RegistrationRepository(settings), NotificationService(NotificationRepository(settings)))
+    return RegistrationService(
+        RegistrationRepository(settings),
+        NotificationService(NotificationRepository(settings)),
+        EventLifecycleService(EventLifecycleRepository(settings)),
+    )
 
 
 @router.post(

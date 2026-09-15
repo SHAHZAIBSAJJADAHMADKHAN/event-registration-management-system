@@ -91,15 +91,15 @@ class RegistrationRepository:
                     "p_attendee_id": str(attendee_id),
                 },
             ).execute().data
-        except PostgrestAPIError:
-            return None
+        except PostgrestAPIError as error:
+            raise RegistrationDatabaseError(error.code, error.message) from error
 
     def get_events(self, event_ids: list[UUID]) -> dict[UUID, dict[str, object]]:
         if not event_ids:
             return {}
         response = (
             self._client.table("events")
-            .select("id,title,starts_at,location,status")
+            .select("id,title,starts_at,ends_at,location,status")
             .in_("id", [str(event_id) for event_id in event_ids])
             .execute()
         )

@@ -12,6 +12,7 @@ class RegistrationEventSummary(BaseModel):
     id: UUID
     title: str
     starts_at: datetime
+    ends_at: datetime | None = None
     location: str
     status: EventStatus
 

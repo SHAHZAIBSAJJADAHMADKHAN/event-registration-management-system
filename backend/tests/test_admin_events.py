@@ -91,6 +91,7 @@ def payload(**overrides: object) -> dict[str, object]:
         "title": "Security workshop",
         "description": "A practical security workshop.",
         "starts_at": "2030-01-01T10:00:00Z",
+        "ends_at": "2030-01-01T12:00:00Z",
         "location": "Nowshera Hall",
         "capacity": 25,
         "status": "draft",
@@ -118,6 +119,7 @@ def test_admin_creates_lists_gets_and_updates_event(admin_client: TestClient) ->
     assert created.status_code == 201
     event = created.json()
     assert event["status"] == "draft"
+    assert event["ends_at"] == "2030-01-01T12:00:00Z"
     assert event["created_by"] == str(ADMIN.id)
 
     listed = admin_client.get("/api/admin/events")
@@ -142,7 +144,7 @@ def test_admin_can_create_published_event_that_is_discoverable(
 ) -> None:
     response = admin_client.post(
         "/api/admin/events",
-        json=payload(status="published", starts_at=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat()),
+        json=payload(status="published", starts_at=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat(), ends_at=(datetime.now(timezone.utc) + timedelta(days=1, hours=2)).isoformat()),
     )
     assert response.status_code == 201
 
@@ -185,6 +187,8 @@ def test_unauthenticated_and_attendee_requests_are_rejected(event_service: Event
         payload(status="cancelled"),
         payload(status="published", starts_at="2000-01-01T10:00:00Z"),
         payload(starts_at="2030-01-01T10:00:00"),
+        payload(ends_at="2030-01-01T10:00:00Z"),
+        payload(ends_at="2030-01-01T09:00:00Z"),
     ],
 )
 def test_invalid_event_input_is_rejected(
@@ -203,6 +207,50 @@ def test_missing_event_and_invalid_transition_return_safe_errors(admin_client: T
     invalid = admin_client.patch(f"/api/admin/events/{created['id']}/status", json={"status": "completed"})
     assert invalid.status_code == 409
     assert invalid.json()["error"]["code"] == "invalid_event_transition"
+
+
+def test_new_events_require_explicit_status_and_end_time(admin_client: TestClient) -> None:
+    no_status = payload()
+    no_status.pop("status")
+    assert admin_client.post("/api/admin/events", json=no_status).status_code == 422
+
+    no_end = payload()
+    no_end.pop("ends_at")
+    assert admin_client.post("/api/admin/events", json=no_end).status_code == 422
+
+
+def test_event_updates_validate_resulting_start_and_end_times(admin_client: TestClient) -> None:
+    created = admin_client.post("/api/admin/events", json=payload()).json()
+    event_id = created["id"]
+    event_path = f"/api/admin/events/{event_id}"
+
+    valid_start = admin_client.patch(event_path, json={"starts_at": "2030-01-01T11:00:00Z"})
+    assert valid_start.status_code == 200
+    assert valid_start.json()["ends_at"] == "2030-01-01T12:00:00Z"
+
+    valid_end = admin_client.patch(event_path, json={"ends_at": "2030-01-01T13:00:00Z"})
+    assert valid_end.status_code == 200
+    assert valid_end.json()["ends_at"] == "2030-01-01T13:00:00Z"
+
+    invalid_start = admin_client.patch(event_path, json={"starts_at": "2030-01-01T13:00:00Z"})
+    assert invalid_start.status_code == 422
+    assert invalid_start.json()["error"]["code"] == "invalid_event_schedule"
+
+    invalid_end = admin_client.patch(event_path, json={"ends_at": "2030-01-01T10:00:00Z"})
+    assert invalid_end.status_code == 422
+
+
+def test_legacy_event_without_end_time_is_readable(event_service: EventService) -> None:
+    repository = event_service._repository
+    event_id = uuid4()
+    repository.events[event_id] = {
+        "id": str(event_id), "title": "Legacy event", "description": "Existing event",
+        "starts_at": "2030-01-01T10:00:00Z", "location": "Nowshera Hall", "capacity": 25,
+        "status": "draft", "created_by": str(ADMIN.id),
+        "created_at": "2030-01-01T09:00:00Z", "updated_at": "2030-01-01T09:00:00Z",
+    }
+
+    assert event_service.get(event_id).ends_at is None
 
 
 def test_status_transitions_cancel_and_complete_are_terminal(admin_client: TestClient) -> None:

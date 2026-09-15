@@ -7,10 +7,12 @@ from fastapi import APIRouter, Depends, status
 
 from app.core.config import Settings, get_settings
 from app.database.events import EventRepository
+from app.database.lifecycle import EventLifecycleRepository
 from app.dependencies.auth import require_admin
 from app.schemas.auth import AuthenticatedUser
 from app.schemas.events import EventCreate, EventResponse, EventStatusTransition, EventUpdate
 from app.services.events import EventService
+from app.services.lifecycle import EventLifecycleService
 
 router = APIRouter(prefix="/admin/events", tags=["admin events"])
 
@@ -18,7 +20,9 @@ router = APIRouter(prefix="/admin/events", tags=["admin events"])
 def get_event_service(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> EventService:
-    return EventService(EventRepository(settings))
+    return EventService(
+        EventRepository(settings), EventLifecycleService(EventLifecycleRepository(settings))
+    )
 
 
 @router.post("", response_model=EventResponse, status_code=status.HTTP_201_CREATED)

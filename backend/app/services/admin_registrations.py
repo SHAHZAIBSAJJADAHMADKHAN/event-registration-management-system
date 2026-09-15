@@ -1,12 +1,18 @@
 from uuid import UUID
 from app.core.errors import APIError
 from app.database.registrations import RegistrationDatabaseError, RegistrationRepository
+from app.services.lifecycle import EventLifecycleService
 from app.services.notifications import NotificationService
 
 
 class AdminRegistrationService:
-    def __init__(self, repository: RegistrationRepository, notifications: NotificationService) -> None:
-        self._repository, self._notifications = repository, notifications
+    def __init__(
+        self,
+        repository: RegistrationRepository,
+        notifications: NotificationService,
+        lifecycle: EventLifecycleService | None = None,
+    ) -> None:
+        self._repository, self._notifications, self._lifecycle = repository, notifications, lifecycle
 
     def _error(self, error: RegistrationDatabaseError) -> APIError:
         text = error.message.lower()
@@ -35,6 +41,8 @@ class AdminRegistrationService:
         ]
 
     def approve(self, registration_id: UUID) -> dict[str, object]:
+        if self._lifecycle is not None:
+            self._lifecycle.reconcile_overdue_events()
         try: row = self._repository.approve_atomic(registration_id)
         except RegistrationDatabaseError as error: raise self._error(error)
         event = self._repository.get_events([UUID(str(row["event_id"]))])[UUID(str(row["event_id"]))]
