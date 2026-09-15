@@ -8,6 +8,7 @@ from app.schemas.admin_operations import (
     AdminEventReportRow,
     AdminAttendeeRegistration,
     AdminDashboardSummary,
+    AdminEventDetailedReport,
     EventOperationalSummary,
 )
 from app.schemas.foundation import RegistrationStatus
@@ -76,6 +77,25 @@ class AdminOperationsService:
             active_registrations=active,
             cancelled_registrations=cancelled,
             remaining_availability=max(capacity - active, 0),
+        )
+
+    def detailed_event_report(self, event_id: UUID) -> AdminEventDetailedReport:
+        event = self._event_or_404(event_id)
+        registrations = self._repository.list_event_registrations(event_id)
+        counts = {status: 0 for status in RegistrationStatus}
+        for registration in registrations:
+            counts[RegistrationStatus(str(registration["status"]))] += 1
+        capacity = int(event["capacity"])
+        return AdminEventDetailedReport(
+            event_id=event_id,
+            event_title=str(event["title"]),
+            starts_at=event["starts_at"],
+            location=str(event["location"]),
+            status=event["status"],
+            capacity=capacity,
+            remaining_availability=max(capacity - counts[RegistrationStatus.APPROVED], 0),
+            registration_counts=counts,
+            registrations=self._attendee_rows(event_id),
         )
 
     def dashboard(self) -> AdminDashboardSummary:

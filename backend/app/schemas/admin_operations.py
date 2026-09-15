@@ -34,6 +34,18 @@ class AdminEventReportRow(EventOperationalSummary):
     status: EventStatus
 
 
+class AdminEventDetailedReport(BaseModel):
+    event_id: UUID
+    event_title: str
+    starts_at: datetime
+    location: str
+    status: EventStatus
+    capacity: int = Field(gt=0)
+    remaining_availability: int = Field(ge=0)
+    registration_counts: dict[RegistrationStatus, int]
+    registrations: list[AdminAttendeeRegistration]
+
+
 class AdminDashboardSummary(BaseModel):
     total_events: int = Field(ge=0)
     total_registrations: int = Field(ge=0)

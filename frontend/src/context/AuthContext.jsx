@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { getCurrentProfile } from "../services/api";
 import { supabase, supabaseConfigurationError } from "../services/supabase";
+import { isSupportedSignUpEmail, supportedEmailMessage } from "../utils/authValidation";
 
 export const AuthContext = createContext(null);
 
@@ -62,6 +63,7 @@ export function AuthProvider({ children }) {
 
   const signUp = useCallback(async ({ fullName, email, password }) => {
     if (!supabase) return { error: new Error(supabaseConfigurationError) };
+    if (!isSupportedSignUpEmail(email)) return { error: new Error(supportedEmailMessage) };
     // Role is deliberately absent: the database auth trigger provisions attendees only.
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,

@@ -134,6 +134,27 @@ def test_event_report_includes_operational_capacity_and_status(
     }
 
 
+def test_detailed_event_report_includes_all_status_counts_and_rows(
+    admin_client: TestClient, operations_service: AdminOperationsService,
+) -> None:
+    repository = operations_service._repository
+    now = datetime(2030, 1, 1, 10, 0, tzinfo=timezone.utc).isoformat()
+    for status in ("pending", "rejected"):
+        attendee_id = uuid4()
+        repository.registrations.append({"id": str(uuid4()), "event_id": str(repository.event_id), "attendee_id": str(attendee_id), "status": status, "created_at": now})
+        repository.profile_data[attendee_id] = {"id": str(attendee_id), "full_name": f"{status.title()} Attendee"}
+        repository.emails[attendee_id] = f"{status}@example.test"
+
+    response = admin_client.get(f"/api/admin/events/{repository.event_id}/report")
+
+    assert response.status_code == 200
+    report = response.json()
+    assert report["event_title"] == "Town Hall"
+    assert report["registration_counts"] == {"pending": 1, "approved": 1, "rejected": 1, "cancelled": 1}
+    assert report["remaining_availability"] == 2
+    assert {row["registration_status"] for row in report["registrations"]} == {"pending", "approved", "rejected", "cancelled"}
+
+
 def test_check_in_and_csv_export_are_practical_and_safe(
     admin_client: TestClient, operations_service
 ) -> None:
@@ -181,6 +202,7 @@ def test_attendee_is_denied_operational_data(operations_service: AdminOperations
             client.get("/api/admin/dashboard"),
             client.get("/api/admin/reports/events"),
             client.get(f"/api/admin/events/{event_id}/check-in"),
+            client.get(f"/api/admin/events/{event_id}/report"),
             client.get(f"/api/admin/events/{event_id}/attendees/export.csv"),
         ]
     app.dependency_overrides.clear()

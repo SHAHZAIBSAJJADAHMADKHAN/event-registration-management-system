@@ -60,6 +60,7 @@ export const getAdminEventAttendees = (id, accessToken) => apiRequest(`/admin/ev
 export const getAdminEventSummary = (id, accessToken) => apiRequest(`/admin/events/${id}/summary`, { accessToken });
 export const getAdminDashboard = (accessToken) => apiRequest("/admin/dashboard", { accessToken });
 export const getAdminEventReport = (accessToken) => apiRequest("/admin/reports/events", { accessToken });
+export const getAdminEventDetailedReport = (id, accessToken) => apiRequest(`/admin/events/${id}/report`, { accessToken });
 export const getAdminRegistrationRequests = ({ status = "pending", eventId } = {}, accessToken) => {
   const params = new URLSearchParams();
   if (status) params.set("status", status);

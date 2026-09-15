@@ -16,6 +16,7 @@ from app.dependencies.auth import require_admin
 from app.schemas.admin_operations import (
     AdminAttendeeRegistration,
     AdminDashboardSummary,
+    AdminEventDetailedReport,
     AdminEventReportRow,
     EventOperationalSummary,
 )
@@ -104,6 +105,15 @@ async def event_summary(
     service: Annotated[AdminOperationsService, Depends(get_admin_operations_service)],
 ) -> EventOperationalSummary:
     return service.operational_summary(event_id)
+
+
+@router.get("/events/{event_id}/report", response_model=AdminEventDetailedReport)
+async def detailed_event_report(
+    event_id: UUID,
+    _: Annotated[AuthenticatedUser, Depends(require_admin)],
+    service: Annotated[AdminOperationsService, Depends(get_admin_operations_service)],
+) -> AdminEventDetailedReport:
+    return service.detailed_event_report(event_id)
 
 
 @router.get("/events/{event_id}/check-in", response_model=list[AdminAttendeeRegistration])
